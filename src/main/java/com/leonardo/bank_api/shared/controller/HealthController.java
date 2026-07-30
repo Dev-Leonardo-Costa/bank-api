@@ -12,4 +12,5 @@ public class HealthController {
     public String health() {
         return "Bank API is running!";
     }
+
 }
