@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.customer.dto;
+package com.leonardo.bank_api.customer.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -12,7 +12,7 @@ public record CreateCustomerRequest(
 
         @CPF
         String cpf,
-        
+
         @Email
         String email,
 
