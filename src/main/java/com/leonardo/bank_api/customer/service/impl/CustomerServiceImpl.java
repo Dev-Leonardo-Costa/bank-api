@@ -1,11 +1,14 @@
 package com.leonardo.bank_api.customer.service.impl;
 
+import com.leonardo.bank_api.common.exception.DuplicateResourceException;
+import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.customer.dto.request.CreateCustomerRequest;
 import com.leonardo.bank_api.customer.dto.response.CustomerResponse;
 import com.leonardo.bank_api.customer.entity.Customer;
 import com.leonardo.bank_api.customer.mapper.CustomerMapper;
 import com.leonardo.bank_api.customer.repository.CustomerRepository;
 import com.leonardo.bank_api.customer.service.CustomerService;
+import com.sun.jdi.request.DuplicateRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -60,15 +63,15 @@ public class CustomerServiceImpl implements CustomerService {
 //                ))
 //                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
         Customer customer = customerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado"));
         return customerMapper.toResponse(customer);
     }
 
     private void validateEmailEndCpf(CreateCustomerRequest request) {
         if (customerRepository.findByEmail(request.email()).isPresent() ) {
-            throw new RuntimeException("E-mail já cadastrado");
+            throw new DuplicateResourceException("E-mail já cadastrado");
         } else if (customerRepository.findByCpf(request.cpf()).isPresent()) {
-            throw new RuntimeException("CPF já cadastrado");
+            throw new DuplicateResourceException("CPF já cadastrado");
         }
     }
 
