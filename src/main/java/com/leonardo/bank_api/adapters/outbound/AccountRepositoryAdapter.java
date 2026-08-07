@@ -1,5 +1,7 @@
 package com.leonardo.bank_api.adapters.outbound;
 
+import com.leonardo.bank_api.adapters.outbound.entity.AccountEntity;
+import com.leonardo.bank_api.adapters.outbound.mapper.AccountMapper;
 import com.leonardo.bank_api.ports.AccountRepositoryPort;
 import com.leonardo.bank_api.domain.Account;
 import org.springframework.stereotype.Repository;
@@ -16,17 +18,19 @@ public class AccountRepositoryAdapter implements AccountRepositoryPort {
 
     @Override
     public Account save(Account account) {
-        if (account.getId() == null) {
-            em.persist(account);
-            return account;
+        AccountEntity entity = AccountMapper.toEntity(account);
+        if (entity.getId() == null) {
+            em.persist(entity);
+            return AccountMapper.toDomain(entity);
         } else {
-            return em.merge(account);
+            AccountEntity merged = em.merge(entity);
+            return AccountMapper.toDomain(merged);
         }
     }
 
     @Override
     public Optional<Account> findById(Long id) {
-        Account a = em.find(Account.class, id);
-        return Optional.ofNullable(a);
+        AccountEntity e = em.find(AccountEntity.class, id);
+        return Optional.ofNullable(AccountMapper.toDomain(e));
     }
 }
