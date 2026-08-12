@@ -27,9 +27,6 @@ public class Customer {
     private String email;
 
     @Column(nullable = false)
-    private String password;
-
-    @Column(nullable = false)
     private Boolean active;
 
     @Column(nullable = false, updatable = false)

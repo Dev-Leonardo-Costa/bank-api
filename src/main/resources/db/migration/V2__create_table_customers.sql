@@ -7,8 +7,6 @@ CREATE TABLE customers (
 
     email VARCHAR(150) NOT NULL UNIQUE,
 
-    password VARCHAR(255) NOT NULL,
-
     active BOOLEAN NOT NULL,
 
     created_at TIMESTAMP NOT NULL,

@@ -8,12 +8,16 @@ import com.leonardo.bank_api.customer.entity.Customer;
 import com.leonardo.bank_api.customer.mapper.CustomerMapper;
 import com.leonardo.bank_api.customer.repository.CustomerRepository;
 import com.leonardo.bank_api.customer.service.CustomerService;
-import com.sun.jdi.request.DuplicateRequestException;
+import com.leonardo.bank_api.security.entity.RoleEntity;
+import com.leonardo.bank_api.security.entity.UserEntity;
+import com.leonardo.bank_api.security.repository.RoleRepository;
+import com.leonardo.bank_api.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -24,15 +28,34 @@ public class CustomerServiceImpl implements CustomerService {
     private final PasswordEncoder passwordEncoder;
     private final CustomerMapper customerMapper;
 
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+
+    @Transactional
     @Override
     public CustomerResponse createCustomer(CreateCustomerRequest request) {
 
         validateEmailEndCpf(request);
 
         Customer customer = customerMapper.toEntity(request);
-        customer.setPassword(passwordEncoder.encode(request.password()));
-        customerRepository.save(customer);
-        return customerMapper.toResponse(customer);
+
+        Customer savedCustomer = customerRepository.save(customer);
+
+        RoleEntity roleCustomer = roleRepository.findByName("ROLE_CUSTOMER")
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Role ROLE_CUSTOMER não encontrada")
+                );
+
+        UserEntity user = UserEntity.builder()
+                .email(request.email())
+                .password(passwordEncoder.encode(request.password()))
+                .enabled(true)
+                .roles(Set.of(roleCustomer))
+                .build();
+
+        userRepository.save(user);
+
+        return customerMapper.toResponse(savedCustomer);
     }
 
     @Override
@@ -45,7 +68,9 @@ public class CustomerServiceImpl implements CustomerService {
     private void validateEmailEndCpf(CreateCustomerRequest request) {
         if (customerRepository.findByEmail(request.email()).isPresent() ) {
             throw new DuplicateResourceException("E-mail já cadastrado");
-        } else if (customerRepository.findByCpf(request.cpf()).isPresent()) {
+        }
+
+        if (customerRepository.findByCpf(request.cpf()).isPresent()) {
             throw new DuplicateResourceException("CPF já cadastrado");
         }
     }
