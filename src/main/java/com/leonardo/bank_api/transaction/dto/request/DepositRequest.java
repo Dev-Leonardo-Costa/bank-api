@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.transaction.dto;
+package com.leonardo.bank_api.transaction.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
