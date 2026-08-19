@@ -6,6 +6,7 @@ import com.leonardo.bank_api.common.exception.BusinessException;
 import com.leonardo.bank_api.common.exception.ForbiddenOperationException;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.shared.enums.AccountStatus;
+import com.leonardo.bank_api.shared.enums.MovementType;
 import com.leonardo.bank_api.shared.enums.TransactionStatus;
 import com.leonardo.bank_api.shared.enums.TransactionType;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
@@ -241,7 +242,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         return transactionRepository
                 .findAll(spec, pageable)
-                .map(transactionMapper::toResponse);
+                .map(transaction -> toStatementResponse(transaction, accountId));
     }
 
     private Account getOwnedAccount(Long accountId) {
@@ -271,5 +272,38 @@ public class TransactionServiceImpl implements TransactionService {
                     "Você não possui permissão para acessar esta conta"
             );
         }
+    }
+
+    private TransactionResponse toStatementResponse(Transaction transaction, Long accountId) {
+
+        MovementType movementType;
+
+        if (transaction.getType() == TransactionType.DEPOSIT) {
+            movementType = MovementType.CREDIT;
+
+        } else if (transaction.getType() == TransactionType.WITHDRAW) {
+            movementType = MovementType.DEBIT;
+
+        } else {
+            movementType = transaction.getSourceAccount()
+                    .getId()
+                    .equals(accountId)
+                    ? MovementType.DEBIT
+                    : MovementType.CREDIT;
+        }
+
+        TransactionResponse response =
+                transactionMapper.toResponse(transaction);
+
+        return new TransactionResponse(
+                response.id(),
+                response.type(),
+                response.status(),
+                response.amount(),
+                response.sourceAccountId(),
+                response.destinationAccountId(),
+                movementType,
+                response.createdAt()
+        );
     }
 }
