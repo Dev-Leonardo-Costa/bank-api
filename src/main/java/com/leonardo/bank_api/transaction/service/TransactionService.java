@@ -1,9 +1,14 @@
 package com.leonardo.bank_api.transaction.service;
 
+import com.leonardo.bank_api.shared.enums.TransactionType;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.time.LocalDate;
 
 public interface TransactionService {
 
@@ -12,4 +17,12 @@ public interface TransactionService {
     TransactionResponse transfer(Long sourceAccountId, TransferRequest request);
 
     TransactionResponse withdraw(Long accountId, WithdrawRequest request);
+
+    Page<TransactionResponse> getStatement(
+            Long accountId,
+            TransactionType type,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    );
 }

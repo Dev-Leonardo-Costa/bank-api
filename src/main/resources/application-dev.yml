@@ -1,6 +1,8 @@
 spring:
   application:
     name: bank-api
+  jackson:
+    date-format: dd-MM-yyyy'T'HH:mm:ss
 
   datasource:
     url: jdbc:postgresql://localhost:5432/bank

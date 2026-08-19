@@ -17,9 +17,15 @@ import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
 import com.leonardo.bank_api.transaction.service.TransactionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -177,22 +183,79 @@ public class TransactionServiceImpl implements TransactionService {
         return transactionMapper.toResponse(savedTransaction);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TransactionResponse> getStatement(
+            Long accountId,
+            TransactionType type,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    ) {
+
+        getOwnedAccount(accountId);
+
+        Specification<Transaction> spec =
+                (root, query, cb) -> cb.or(
+                        cb.equal(
+                                root.get("sourceAccount").get("id"),
+                                accountId
+                        ),
+                        cb.equal(
+                                root.get("destinationAccount").get("id"),
+                                accountId
+                        )
+                );
+
+        if (type != null) {
+            spec = spec.and(
+                    (root, query, cb) ->
+                            cb.equal(root.get("type"), type)
+            );
+        }
+
+        if (startDate != null) {
+            LocalDateTime startDateTime = startDate.atStartOfDay();
+
+            spec = spec.and(
+                    (root, query, cb) ->
+                            cb.greaterThanOrEqualTo(
+                                    root.get("createdAt"),
+                                    startDateTime
+                            )
+            );
+        }
+
+        if (endDate != null) {
+            LocalDateTime endDateTime =
+                    endDate.plusDays(1).atStartOfDay();
+
+            spec = spec.and(
+                    (root, query, cb) ->
+                            cb.lessThan(
+                                    root.get("createdAt"),
+                                    endDateTime
+                            )
+            );
+        }
+
+        return transactionRepository
+                .findAll(spec, pageable)
+                .map(transactionMapper::toResponse);
+    }
+
     private Account getOwnedAccount(Long accountId) {
 
         String email = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
 
-        Account account = accountRepository.findByIdForUpdate(accountId)
+        Account account = accountRepository.findById(accountId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Conta não encontrada")
                 );
 
-        if (!account.getCustomer().getEmail().equalsIgnoreCase(email)) {
-            throw new ForbiddenOperationException(
-                    "Você não possui permissão para movimentar esta conta"
-            );
-        }
+        validateOwnership(account);
 
         return account;
     }
@@ -205,7 +268,7 @@ public class TransactionServiceImpl implements TransactionService {
 
         if (!account.getCustomer().getEmail().equalsIgnoreCase(email)) {
             throw new ForbiddenOperationException(
-                    "Você não possui permissão para movimentar esta conta"
+                    "Você não possui permissão para acessar esta conta"
             );
         }
     }
