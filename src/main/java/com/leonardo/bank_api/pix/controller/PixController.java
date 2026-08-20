@@ -61,4 +61,10 @@ public class PixController {
                 pixService.findRecipientByKey(keyValue)
         );
     }
+
+    @DeleteMapping("/keys/{pixKeyId}")
+    public ResponseEntity<Void> deletePixKey(@PathVariable Long pixKeyId) {
+        pixService.deletePixKey(pixKeyId);
+        return ResponseEntity.noContent().build();
+    }
 }

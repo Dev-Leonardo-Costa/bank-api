@@ -227,6 +227,34 @@ public class PixServiceImpl implements PixService {
         );
     }
 
+    @Transactional
+    @Override
+    public void deletePixKey(Long pixKeyId) {
+
+        String email = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        PixKey pixKey = pixKeyRepository.findById(pixKeyId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Chave PIX não encontrada"
+                        )
+                );
+
+        String ownerEmail = pixKey.getAccount()
+                .getCustomer()
+                .getEmail();
+
+        if (!ownerEmail.equalsIgnoreCase(email)) {
+            throw new ForbiddenOperationException(
+                    "Você não possui permissão para excluir esta chave PIX"
+            );
+        }
+
+        pixKeyRepository.delete(pixKey);
+    }
+
     private PixKeyValidator getValidator(PixKeyType type) {
 
         return validators.stream()

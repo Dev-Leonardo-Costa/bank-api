@@ -17,4 +17,6 @@ public interface PixService {
     List<PixKeyResponse> findMyPixKeys();
 
     PixRecipientResponse findRecipientByKey(String keyValue);
+
+    void deletePixKey(Long pixKeyId);
 }
