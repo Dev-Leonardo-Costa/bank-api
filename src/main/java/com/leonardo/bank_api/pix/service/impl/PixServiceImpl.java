@@ -8,6 +8,7 @@ import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.pix.dto.request.CreatePixKeyRequest;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
 import com.leonardo.bank_api.pix.dto.response.PixKeyResponse;
+import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
 import com.leonardo.bank_api.pix.entity.PixKey;
 import com.leonardo.bank_api.pix.mapper.PixMapper;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
@@ -83,7 +84,9 @@ public class PixServiceImpl implements PixService {
     @Override
     public TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request) {
 
-        PixKey pixKey = pixKeyRepository.findByKeyValue(request.pixKey())
+        String normalizedKey = normalizePixKey(request.pixKey());
+
+        PixKey pixKey = pixKeyRepository.findByKeyValue(normalizedKey)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Chave PIX não encontrada"
@@ -183,6 +186,47 @@ public class PixServiceImpl implements PixService {
         return transactionMapper.toResponse(savedTransaction);
     }
 
+    @Transactional(readOnly = true)
+    @Override
+    public List<PixKeyResponse> findMyPixKeys() {
+
+        String email = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        return pixKeyRepository
+                .findAllByAccountCustomerEmail(email)
+                .stream()
+                .map(pixMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public PixRecipientResponse findRecipientByKey(String keyValue) {
+
+        String normalizedKey = normalizePixKey(keyValue);
+
+        PixKey pixKey = pixKeyRepository.findByKeyValue(normalizedKey)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Chave PIX não encontrada"
+                        )
+                );
+
+        return new PixRecipientResponse(
+                pixKey.getAccount()
+                        .getCustomer()
+                        .getFullName(),
+                pixKey.getType(),
+                maskPixKey(
+                        pixKey.getType(),
+                        pixKey.getKeyValue()
+                ),
+                "Bank API"
+        );
+    }
+
     private PixKeyValidator getValidator(PixKeyType type) {
 
         return validators.stream()
@@ -246,68 +290,121 @@ public class PixServiceImpl implements PixService {
     }
 
 
-    private String validateAndNormalizePixKey(
-            PixKeyType type,
-            String keyValue
-    ) {
+//    private String validateAndNormalizePixKey(
+//            PixKeyType type,
+//            String keyValue
+//    ) {
+//
+//        if (type == PixKeyType.RANDOM) {
+//            return UUID.randomUUID().toString();
+//        }
+//
+//        if (keyValue == null || keyValue.isBlank()) {
+//            throw new BusinessException(
+//                    "O valor da chave PIX é obrigatório"
+//            );
+//        }
+//
+//        if (type == PixKeyType.EMAIL) {
+//
+//            String normalized = keyValue
+//                    .trim()
+//                    .toLowerCase();
+//
+//            if (!normalized.matches(
+//                    "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$"
+//            )) {
+//                throw new BusinessException(
+//                        "E-mail da chave PIX inválido"
+//                );
+//            }
+//
+//            return normalized;
+//        }
+//
+//        if (type == PixKeyType.CPF) {
+//
+//            String normalized =
+//                    keyValue.replaceAll("\\D", "");
+//
+//            if (normalized.length() != 11) {
+//                throw new BusinessException(
+//                        "CPF da chave PIX inválido"
+//                );
+//            }
+//
+//            return normalized;
+//        }
+//
+//        if (type == PixKeyType.PHONE) {
+//
+//            String normalized =
+//                    keyValue.replaceAll("\\D", "");
+//
+//            if (normalized.length() != 11) {
+//                throw new BusinessException(
+//                        "Telefone da chave PIX inválido"
+//                );
+//            }
+//
+//            return "+55" + normalized;
+//        }
+//
+//        throw new BusinessException(
+//                "Tipo de chave PIX não suportado"
+//        );
+//    }
 
-        if (type == PixKeyType.RANDOM) {
-            return UUID.randomUUID().toString();
-        }
+    private String normalizePixKey(String keyValue) {
 
         if (keyValue == null || keyValue.isBlank()) {
-            throw new BusinessException(
-                    "O valor da chave PIX é obrigatório"
-            );
+            throw new BusinessException("Chave PIX é obrigatória");
         }
 
-        if (type == PixKeyType.EMAIL) {
+        String value = keyValue.trim();
 
-            String normalized = keyValue
-                    .trim()
-                    .toLowerCase();
+        if (value.contains("@")) {
+            return value.toLowerCase();
+        }
 
-            if (!normalized.matches(
-                    "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$"
-            )) {
-                throw new BusinessException(
-                        "E-mail da chave PIX inválido"
-                );
+        String onlyNumbers = value.replaceAll("\\D", "");
+
+        if (onlyNumbers.length() == 11) {
+            return onlyNumbers;
+        }
+
+        if (onlyNumbers.length() == 13 && onlyNumbers.startsWith("55")) {
+            return "+" + onlyNumbers;
+        }
+
+        return value;
+    }
+
+    private String maskPixKey(PixKeyType type, String keyValue) {
+
+        return switch (type) {
+
+            case CPF ->
+                    "***.***.***-" +
+                            keyValue.substring(keyValue.length() - 2);
+
+            case EMAIL -> {
+                String[] parts = keyValue.split("@");
+
+                yield parts[0].charAt(0)
+                        + "***@"
+                        + parts[1];
             }
 
-            return normalized;
-        }
+            case PHONE ->
+                    "+55 (***) *****-"
+                            + keyValue.substring(
+                            keyValue.length() - 4
+                    );
 
-        if (type == PixKeyType.CPF) {
+            case RANDOM ->
+                    keyValue.substring(0, 8) + "****";
+        };
 
-            String normalized =
-                    keyValue.replaceAll("\\D", "");
-
-            if (normalized.length() != 11) {
-                throw new BusinessException(
-                        "CPF da chave PIX inválido"
-                );
-            }
-
-            return normalized;
-        }
-
-        if (type == PixKeyType.PHONE) {
-
-            String normalized =
-                    keyValue.replaceAll("\\D", "");
-
-            if (normalized.length() != 11) {
-                throw new BusinessException(
-                        "Telefone da chave PIX inválido"
-                );
-            }
-
-            return "+55" + normalized;
-        }
-
-        throw new BusinessException(
-                "Tipo de chave PIX não suportado"
-        );
     }
 }

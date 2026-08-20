@@ -3,6 +3,7 @@ package com.leonardo.bank_api.pix.controller;
 import com.leonardo.bank_api.pix.dto.request.CreatePixKeyRequest;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
 import com.leonardo.bank_api.pix.dto.response.PixKeyResponse;
+import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
 import com.leonardo.bank_api.pix.service.PixService;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import jakarta.validation.Valid;
@@ -10,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/pix")
@@ -39,6 +42,23 @@ public class PixController {
 
         return ResponseEntity.ok(
                 pixService.transfer(sourceAccountId, request)
+        );
+    }
+
+    @GetMapping("/keys")
+    public ResponseEntity<List<PixKeyResponse>> findMyPixKeys() {
+        return ResponseEntity.ok(
+                pixService.findMyPixKeys()
+        );
+    }
+
+    @GetMapping("/keys/{keyValue}")
+    public ResponseEntity<PixRecipientResponse> findRecipientByKey(
+            @PathVariable String keyValue
+    ) {
+
+        return ResponseEntity.ok(
+                pixService.findRecipientByKey(keyValue)
         );
     }
 }
