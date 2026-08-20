@@ -18,6 +18,7 @@ public record TransactionResponse(
         Long sourceAccountId,
         Long destinationAccountId,
         MovementType movementType,
+        String description,
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
         LocalDateTime createdAt
 

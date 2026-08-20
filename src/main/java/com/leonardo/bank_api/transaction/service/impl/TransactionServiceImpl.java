@@ -292,6 +292,9 @@ public class TransactionServiceImpl implements TransactionService {
                     : MovementType.CREDIT;
         }
 
+        String description =
+                resolveDescription(transaction, movementType);
+
         TransactionResponse response =
                 transactionMapper.toResponse(transaction);
 
@@ -303,7 +306,32 @@ public class TransactionServiceImpl implements TransactionService {
                 response.sourceAccountId(),
                 response.destinationAccountId(),
                 movementType,
+                description,
                 response.createdAt()
         );
+    }
+
+
+    private String resolveDescription(
+            Transaction transaction,
+            MovementType movementType
+    ) {
+
+        return switch (transaction.getType()) {
+
+            case DEPOSIT -> "Depósito";
+
+            case WITHDRAW -> "Saque";
+
+            case TRANSFER ->
+                    movementType == MovementType.DEBIT
+                            ? "Transferência enviada"
+                            : "Transferência recebida";
+
+            case PIX ->
+                    movementType == MovementType.DEBIT
+                            ? "PIX enviado"
+                            : "PIX recebido";
+        };
     }
 }

@@ -26,4 +26,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             WHERE a.id = :id
             """)
     Optional<Account> findByIdForUpdate(@Param("id") Long id);
+
+    Optional<Account> findByCustomerEmail(String email);
 }
