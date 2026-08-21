@@ -5,13 +5,11 @@ import com.leonardo.bank_api.account.repository.AccountRepository;
 import com.leonardo.bank_api.common.exception.BusinessException;
 import com.leonardo.bank_api.common.exception.ForbiddenOperationException;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
-import com.leonardo.bank_api.shared.enums.AccountStatus;
-import com.leonardo.bank_api.shared.enums.MovementType;
-import com.leonardo.bank_api.shared.enums.TransactionStatus;
-import com.leonardo.bank_api.shared.enums.TransactionType;
+import com.leonardo.bank_api.shared.enums.*;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
+import com.leonardo.bank_api.transaction.dto.response.StatementTransactionResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
@@ -245,6 +243,32 @@ public class TransactionServiceImpl implements TransactionService {
                 .map(transaction -> toStatementResponse(transaction, accountId));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StatementTransactionResponse> getStatement(
+            Long accountId,
+            Pageable pageable
+    ) {
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Conta não encontrada"
+                        )
+                );
+
+        validateOwnership(account);
+
+        return transactionRepository
+                .findStatementByAccountId(accountId, pageable)
+                .map(transaction ->
+                        toStatementTransactionResponse(
+                                transaction,
+                                accountId
+                        )
+                );
+    }
+
     private Account getOwnedAccount(Long accountId) {
 
         String email = SecurityContextHolder.getContext()
@@ -330,6 +354,82 @@ public class TransactionServiceImpl implements TransactionService {
 
             case PIX ->
                     movementType == MovementType.DEBIT
+                            ? "PIX enviado"
+                            : "PIX recebido";
+        };
+    }
+
+    private StatementTransactionResponse toStatementTransactionResponse(
+            Transaction transaction,
+            Long accountId
+    ) {
+
+        TransactionDirection direction =
+                resolveTransactionDirection(
+                        transaction,
+                        accountId
+                );
+
+        String description =
+                resolveTransactionDescription(
+                        transaction,
+                        direction
+                );
+
+        return new StatementTransactionResponse(
+                transaction.getId(),
+                transaction.getType(),
+                direction,
+                transaction.getAmount(),
+                description,
+                transaction.getCreatedAt()
+        );
+    }
+
+    private TransactionDirection resolveTransactionDirection(
+            Transaction transaction,
+            Long accountId
+    ) {
+
+        if (transaction.getType() == TransactionType.DEPOSIT) {
+            return TransactionDirection.CREDIT;
+        }
+
+        if (transaction.getType() == TransactionType.WITHDRAW) {
+            return TransactionDirection.DEBIT;
+        }
+
+        if (transaction.getSourceAccount() != null
+                && transaction.getSourceAccount()
+                .getId()
+                .equals(accountId)) {
+
+            return TransactionDirection.DEBIT;
+        }
+
+        return TransactionDirection.CREDIT;
+    }
+
+    private String resolveTransactionDescription(
+            Transaction transaction,
+            TransactionDirection direction
+    ) {
+
+        return switch (transaction.getType()) {
+
+            case DEPOSIT ->
+                    "Depósito";
+
+            case WITHDRAW ->
+                    "Saque";
+
+            case TRANSFER ->
+                    direction == TransactionDirection.DEBIT
+                            ? "Transferência enviada"
+                            : "Transferência recebida";
+
+            case PIX ->
+                    direction == TransactionDirection.DEBIT
                             ? "PIX enviado"
                             : "PIX recebido";
         };

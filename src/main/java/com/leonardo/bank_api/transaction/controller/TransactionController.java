@@ -5,6 +5,7 @@ import com.leonardo.bank_api.shared.enums.TransactionType;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
+import com.leonardo.bank_api.transaction.dto.response.StatementTransactionResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.service.TransactionService;
 import jakarta.validation.Valid;
@@ -88,4 +89,10 @@ public class TransactionController {
 
         return ResponseEntity.ok(PagedResponse.from(result));
     }
+
+    @GetMapping("/accounts/{accountId}/statement")
+    public ResponseEntity<Page<StatementTransactionResponse>> getStatement(@PathVariable Long accountId, Pageable pageable) {
+        return ResponseEntity.ok(transactionService.getStatement(accountId, pageable));
+    }
+
 }

@@ -4,6 +4,7 @@ import com.leonardo.bank_api.shared.enums.TransactionType;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
+import com.leonardo.bank_api.transaction.dto.response.StatementTransactionResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,4 +26,6 @@ public interface TransactionService {
             LocalDate endDate,
             Pageable pageable
     );
+
+    Page<StatementTransactionResponse> getStatement(Long accountId, Pageable pageable);
 }
