@@ -5,6 +5,8 @@ import com.leonardo.bank_api.common.exception.BusinessException;
 import com.leonardo.bank_api.common.exception.ForbiddenOperationException;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
+import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
+import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
 import com.leonardo.bank_api.pix.mapper.PixMapper;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
@@ -1360,5 +1362,207 @@ class PixServiceImplTest {
 
         verify(transactionRepository)
                 .save(any(Transaction.class));
+    }
+
+    @Test
+    void shouldUpdateDailyPixLimitSuccessfully() {
+
+        Long accountId = 1L;
+        String email = "cliente@email.com";
+
+        Customer customer = Customer.builder()
+                .id(1L)
+                .email(email)
+                .build();
+
+        Account account = Account.builder()
+                .id(accountId)
+                .dailyPixLimit(new BigDecimal("5000.00"))
+                .customer(customer)
+                .build();
+
+        UpdatePixLimitRequest request =
+                new UpdatePixLimitRequest(
+                        new BigDecimal("8000.00")
+                );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                email,
+                                null
+                        )
+                );
+
+        when(accountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
+
+        when(accountRepository.save(account))
+                .thenReturn(account);
+
+        PixLimitResponse response =
+                pixService.updateDailyPixLimit(
+                        accountId,
+                        request
+                );
+
+        assertThat(response.dailyPixLimit())
+                .isEqualByComparingTo("8000.00");
+
+        assertThat(account.getDailyPixLimit())
+                .isEqualByComparingTo("8000.00");
+
+        verify(accountRepository)
+                .save(account);
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUpdatingPixLimitFromAnotherCustomer() {
+
+        Long accountId = 1L;
+
+        String authenticatedEmail = "cliente1@email.com";
+        String ownerEmail = "cliente2@email.com";
+
+        Customer owner = Customer.builder()
+                .id(2L)
+                .email(ownerEmail)
+                .build();
+
+        Account account = Account.builder()
+                .id(accountId)
+                .dailyPixLimit(new BigDecimal("5000.00"))
+                .customer(owner)
+                .build();
+
+        UpdatePixLimitRequest request =
+                new UpdatePixLimitRequest(
+                        new BigDecimal("8000.00")
+                );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                authenticatedEmail,
+                                null
+                        )
+                );
+
+        when(accountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() ->
+                pixService.updateDailyPixLimit(
+                        accountId,
+                        request
+                )
+        )
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessage(
+                        "Você não possui permissão para movimentar esta conta"
+                );
+
+        verify(accountRepository, never())
+                .save(any(Account.class));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUpdatingPixLimitAndAccountDoesNotExist() {
+
+        Long accountId = 99L;
+        String email = "cliente@email.com";
+
+        UpdatePixLimitRequest request =
+                new UpdatePixLimitRequest(
+                        new BigDecimal("8000.00")
+                );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                email,
+                                null
+                        )
+                );
+
+        when(accountRepository.findById(accountId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                pixService.updateDailyPixLimit(
+                        accountId,
+                        request
+                )
+        )
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Conta não encontrada");
+
+        verify(accountRepository, never())
+                .save(any(Account.class));
+    }
+
+    @Test
+    void shouldReturnDailyPixLimitSuccessfully() {
+
+        Long accountId = 1L;
+        String email = "cliente@email.com";
+
+        Customer customer = Customer.builder()
+                .id(1L)
+                .email(email)
+                .build();
+
+        Account account = Account.builder()
+                .id(accountId)
+                .dailyPixLimit(new BigDecimal("5000.00"))
+                .customer(customer)
+                .build();
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                email,
+                                null
+                        )
+                );
+
+        when(accountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
+
+        PixLimitResponse response =
+                pixService.getDailyPixLimit(accountId);
+
+        assertThat(response)
+                .isNotNull();
+
+        assertThat(response.dailyPixLimit())
+                .isEqualByComparingTo("5000.00");
+
+        verify(accountRepository)
+                .findById(accountId);
+    }
+
+    @Test
+    void shouldThrowExceptionWhenGettingPixLimitAndAccountDoesNotExist() {
+
+        Long accountId = 99L;
+        String email = "cliente@email.com";
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                email,
+                                null
+                        )
+                );
+
+        when(accountRepository.findById(accountId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                pixService.getDailyPixLimit(accountId)
+        )
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Conta não encontrada");
     }
 }

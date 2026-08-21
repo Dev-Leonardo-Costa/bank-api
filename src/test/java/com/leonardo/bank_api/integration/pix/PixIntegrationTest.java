@@ -6,6 +6,8 @@ import com.leonardo.bank_api.common.exception.BusinessException;
 import com.leonardo.bank_api.customer.entity.Customer;
 import com.leonardo.bank_api.customer.repository.CustomerRepository;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
+import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
+import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.entity.PixKey;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.PixService;
@@ -495,5 +497,171 @@ class PixIntegrationTest {
 
         assertThat(updatedDestination.getBalance())
                 .isEqualByComparingTo("80.00");
+    }
+
+    @Test
+    void shouldUpdateDailyPixLimitAndPersistInDatabase() {
+
+        String email = "limite@email.com";
+
+        Customer customer = customerRepository.save(
+                Customer.builder()
+                        .fullName("Cliente Limite PIX")
+                        .cpf("12345678901")
+                        .email(email)
+                        .build()
+        );
+
+        Account account = accountRepository.save(
+                Account.builder()
+                        .number("00000009")
+                        .agency("0001")
+                        .balance(new BigDecimal("1000.00"))
+                        .dailyPixLimit(new BigDecimal("5000.00"))
+                        .status(AccountStatus.ACTIVE)
+                        .customer(customer)
+                        .build()
+        );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                email,
+                                null
+                        )
+                );
+
+        UpdatePixLimitRequest request =
+                new UpdatePixLimitRequest(
+                        new BigDecimal("8000.00")
+                );
+
+        PixLimitResponse response =
+                pixService.updateDailyPixLimit(
+                        account.getId(),
+                        request
+                );
+
+        assertThat(response.dailyPixLimit())
+                .isEqualByComparingTo("8000.00");
+
+        Account accountFromDatabase =
+                accountRepository.findById(account.getId())
+                        .orElseThrow();
+
+        assertThat(accountFromDatabase.getDailyPixLimit())
+                .isEqualByComparingTo("8000.00");
+    }
+
+    @Test
+    void shouldUseUpdatedDailyPixLimitWhenTransferring() {
+
+        String senderEmail = "limite.origem@email.com";
+        String receiverEmail = "limite.destino@email.com";
+
+        Customer senderCustomer = customerRepository.save(
+                Customer.builder()
+                        .fullName("Cliente Origem Limite")
+                        .cpf("52998224725")
+                        .email(senderEmail)
+                        .build()
+        );
+
+        Customer receiverCustomer = customerRepository.save(
+                Customer.builder()
+                        .fullName("Cliente Destino Limite")
+                        .cpf("11144477735")
+                        .email(receiverEmail)
+                        .build()
+        );
+
+        Account sourceAccount = accountRepository.save(
+                Account.builder()
+                        .number("00000010")
+                        .agency("0001")
+                        .balance(new BigDecimal("2000.00"))
+                        .dailyPixLimit(new BigDecimal("5000.00"))
+                        .status(AccountStatus.ACTIVE)
+                        .customer(senderCustomer)
+                        .build()
+        );
+
+        Account destinationAccount = accountRepository.save(
+                Account.builder()
+                        .number("00000011")
+                        .agency("0001")
+                        .balance(new BigDecimal("500.00"))
+                        .status(AccountStatus.ACTIVE)
+                        .customer(receiverCustomer)
+                        .build()
+        );
+
+        PixKey pixKey = pixKeyRepository.save(
+                PixKey.builder()
+                        .type(PixKeyType.EMAIL)
+                        .keyValue(receiverEmail)
+                        .account(destinationAccount)
+                        .build()
+        );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                senderEmail,
+                                null
+                        )
+                );
+
+        // 1. Altera o limite de R$ 5.000 para R$ 1.000
+        PixLimitResponse limitResponse =
+                pixService.updateDailyPixLimit(
+                        sourceAccount.getId(),
+                        new UpdatePixLimitRequest(
+                                new BigDecimal("1000.00")
+                        )
+                );
+
+        assertThat(limitResponse.dailyPixLimit())
+                .isEqualByComparingTo("1000.00");
+
+        // 2. Tenta fazer um PIX de R$ 1.200
+        PixTransferRequest transferRequest =
+                new PixTransferRequest(
+                        pixKey.getKeyValue(),
+                        new BigDecimal("1200.00")
+                );
+
+        assertThatThrownBy(() ->
+                pixService.transfer(
+                        sourceAccount.getId(),
+                        transferRequest
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Limite diário de PIX excedido");
+
+        // 3. Consulta novamente o banco
+        Account sourceFromDatabase =
+                accountRepository.findById(sourceAccount.getId())
+                        .orElseThrow();
+
+        Account destinationFromDatabase =
+                accountRepository.findById(destinationAccount.getId())
+                        .orElseThrow();
+
+        // 4. Nenhum saldo pode ter sido alterado
+        assertThat(sourceFromDatabase.getBalance())
+                .isEqualByComparingTo("2000.00");
+
+        assertThat(destinationFromDatabase.getBalance())
+                .isEqualByComparingTo("500.00");
+
+        // 5. O novo limite continua persistido
+        assertThat(sourceFromDatabase.getDailyPixLimit())
+                .isEqualByComparingTo("1000.00");
+
+        // 6. Nenhuma transação PIX deve ter sido criada
+        assertThat(transactionRepository.count())
+                .isZero();
     }
 }
