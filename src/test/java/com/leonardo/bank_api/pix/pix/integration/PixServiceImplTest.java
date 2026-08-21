@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.pix.service;
+package com.leonardo.bank_api.pix.pix.integration;
 
 import com.leonardo.bank_api.account.repository.AccountRepository;
 import com.leonardo.bank_api.common.exception.BusinessException;

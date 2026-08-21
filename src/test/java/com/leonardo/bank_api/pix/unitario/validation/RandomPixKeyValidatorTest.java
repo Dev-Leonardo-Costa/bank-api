@@ -1,5 +1,6 @@
-package com.leonardo.bank_api.pix.validation;
+package com.leonardo.bank_api.pix.unitario.validation;
 
+import com.leonardo.bank_api.pix.validation.RandomPixKeyValidator;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;

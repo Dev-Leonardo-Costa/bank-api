@@ -6,8 +6,9 @@ import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
 import com.leonardo.bank_api.transaction.dto.response.StatementTransactionResponse;
+import com.leonardo.bank_api.transaction.dto.response.TransactionReceiptResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
-import com.leonardo.bank_api.transaction.service.TransactionService;
+import com.leonardo.bank_api.transaction.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -93,6 +94,13 @@ public class TransactionController {
     @GetMapping("/accounts/{accountId}/statement")
     public ResponseEntity<Page<StatementTransactionResponse>> getStatement(@PathVariable Long accountId, Pageable pageable) {
         return ResponseEntity.ok(transactionService.getStatement(accountId, pageable));
+    }
+
+    @GetMapping("/{transactionId}/receipt")
+    public ResponseEntity<TransactionReceiptResponse> getReceipt(@PathVariable Long transactionId) {
+        return ResponseEntity.ok(
+                transactionService.getReceipt(transactionId)
+        );
     }
 
 }

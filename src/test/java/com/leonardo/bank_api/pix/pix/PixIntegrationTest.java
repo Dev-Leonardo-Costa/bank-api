@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.integration.pix;
+package com.leonardo.bank_api.pix.pix;
 
 import com.leonardo.bank_api.account.entity.Account;
 import com.leonardo.bank_api.account.repository.AccountRepository;
@@ -14,15 +14,6 @@ import com.leonardo.bank_api.pix.service.PixService;
 import com.leonardo.bank_api.shared.enums.AccountStatus;
 import com.leonardo.bank_api.shared.enums.PixKeyType;
 import com.leonardo.bank_api.shared.enums.TransactionStatus;
-import com.leonardo.bank_api.shared.enums.TransactionType;
-import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
-import com.leonardo.bank_api.transaction.entity.Transaction;
-import com.leonardo.bank_api.transaction.repository.TransactionRepository;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -43,7 +34,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicInteger;import com.leonardo.bank_api.shared.enums.TransactionType;
+import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
+import com.leonardo.bank_api.transaction.entity.Transaction;
+import com.leonardo.bank_api.transaction.repository.TransactionRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
 
 @SpringBootTest
 @Testcontainers

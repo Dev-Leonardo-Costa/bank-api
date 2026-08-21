@@ -1,6 +1,7 @@
-package com.leonardo.bank_api.pix.validation;
+package com.leonardo.bank_api.pix.unitario.validation;
 
 import com.leonardo.bank_api.common.exception.BusinessException;
+import com.leonardo.bank_api.pix.validation.CpfPixKeyValidator;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

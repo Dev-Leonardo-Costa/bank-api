@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.transaction.service.impl;
+package com.leonardo.bank_api.transaction.impl;
 
 import com.leonardo.bank_api.account.entity.Account;
 import com.leonardo.bank_api.account.repository.AccountRepository;
@@ -10,11 +10,12 @@ import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
 import com.leonardo.bank_api.transaction.dto.response.StatementTransactionResponse;
+import com.leonardo.bank_api.transaction.dto.response.TransactionReceiptResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
-import com.leonardo.bank_api.transaction.service.TransactionService;
+import com.leonardo.bank_api.transaction.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -269,6 +270,25 @@ public class TransactionServiceImpl implements TransactionService {
                 );
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public TransactionReceiptResponse getReceipt(
+            Long transactionId
+    ) {
+
+        Transaction transaction =
+                transactionRepository.findById(transactionId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Transação não encontrada"
+                                )
+                        );
+
+        validateTransactionAccess(transaction);
+
+        return toTransactionReceiptResponse(transaction);
+    }
+
     private Account getOwnedAccount(Long accountId) {
 
         String email = SecurityContextHolder.getContext()
@@ -463,5 +483,76 @@ public class TransactionServiceImpl implements TransactionService {
         return transaction.getSourceAccount()
                 .getCustomer()
                 .getFullName();
+    }
+
+    private void validateTransactionAccess(
+            Transaction transaction
+    ) {
+
+        String authenticatedEmail =
+                SecurityContextHolder.getContext()
+                        .getAuthentication()
+                        .getName();
+
+        boolean isSourceOwner =
+                transaction.getSourceAccount() != null
+                        && transaction.getSourceAccount()
+                        .getCustomer()
+                        .getEmail()
+                        .equalsIgnoreCase(authenticatedEmail);
+
+        boolean isDestinationOwner =
+                transaction.getDestinationAccount() != null
+                        && transaction.getDestinationAccount()
+                        .getCustomer()
+                        .getEmail()
+                        .equalsIgnoreCase(authenticatedEmail);
+
+        if (!isSourceOwner && !isDestinationOwner) {
+
+            throw new ForbiddenOperationException(
+                    "Você não possui permissão para acessar esta transação"
+            );
+        }
+    }
+
+    private TransactionReceiptResponse toTransactionReceiptResponse(Transaction transaction) {
+
+        Account source = transaction.getSourceAccount();
+        Account destination = transaction.getDestinationAccount();
+
+        return new TransactionReceiptResponse(
+
+                transaction.getId(),
+                transaction.getType(),
+                transaction.getStatus(),
+                transaction.getAmount(),
+
+                source != null
+                        ? source.getCustomer().getFullName()
+                        : null,
+
+                source != null
+                        ? source.getAgency()
+                        : null,
+
+                source != null
+                        ? source.getNumber()
+                        : null,
+
+                destination != null
+                        ? destination.getCustomer().getFullName()
+                        : null,
+
+                destination != null
+                        ? destination.getAgency()
+                        : null,
+
+                destination != null
+                        ? destination.getNumber()
+                        : null,
+
+                transaction.getCreatedAt()
+        );
     }
 }
