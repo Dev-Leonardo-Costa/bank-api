@@ -7,7 +7,9 @@ import com.leonardo.bank_api.common.exception.ForbiddenOperationException;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.pix.dto.request.CreatePixKeyRequest;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
+import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
 import com.leonardo.bank_api.pix.dto.response.PixKeyResponse;
+import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
 import com.leonardo.bank_api.pix.entity.PixKey;
 import com.leonardo.bank_api.pix.mapper.PixMapper;
@@ -27,6 +29,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -159,6 +164,11 @@ public class PixServiceImpl implements PixService {
             );
         }
 
+        validateDailyPixLimit(
+                sourceAccount,
+                request.amount()
+        );
+
         sourceAccount.setBalance(
                 sourceAccount.getBalance()
                         .subtract(request.amount())
@@ -253,6 +263,46 @@ public class PixServiceImpl implements PixService {
         }
 
         pixKeyRepository.delete(pixKey);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PixLimitResponse getDailyPixLimit(Long accountId) {
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Conta não encontrada"
+                        )
+                );
+
+        validateOwnership(account);
+
+        return new PixLimitResponse(account.getDailyPixLimit());
+    }
+
+    @Transactional
+    @Override
+    public PixLimitResponse updateDailyPixLimit(Long accountId, UpdatePixLimitRequest request) {
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Conta não encontrada"
+                        )
+                );
+
+        validateOwnership(account);
+
+        account.setDailyPixLimit(
+                request.dailyPixLimit()
+        );
+
+        accountRepository.save(account);
+
+        return new PixLimitResponse(
+                account.getDailyPixLimit()
+        );
     }
 
     private PixKeyValidator getValidator(PixKeyType type) {
@@ -369,5 +419,37 @@ public class PixServiceImpl implements PixService {
                     keyValue.substring(0, 8) + "****";
         };
 
+    }
+
+    private void validateDailyPixLimit(
+            Account sourceAccount,
+            BigDecimal amount
+    ) {
+
+        LocalDate today = LocalDate.now();
+
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+
+        BigDecimal amountSentToday =
+                transactionRepository.sumAmountByAccountAndPeriod(
+                        sourceAccount.getId(),
+                        TransactionType.PIX,
+                        TransactionStatus.COMPLETED,
+                        startOfDay,
+                        endOfDay
+                );
+
+        BigDecimal totalAfterTransfer =
+                amountSentToday.add(amount);
+
+        if (totalAfterTransfer.compareTo(
+                sourceAccount.getDailyPixLimit()
+        ) > 0) {
+
+            throw new BusinessException(
+                    "Limite diário de PIX excedido"
+            );
+        }
     }
 }

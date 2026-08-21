@@ -38,6 +38,14 @@ public class Account {
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
+    @Column(
+            name = "daily_pix_limit",
+            nullable = false,
+            precision = 19,
+            scale = 2
+    )
+    private BigDecimal dailyPixLimit;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -53,6 +61,10 @@ public class Account {
 
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
+        }
+
+        if (dailyPixLimit == null) {
+            dailyPixLimit = new BigDecimal("50000.00");
         }
     }
 }

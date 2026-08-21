@@ -1,0 +1,2 @@
+ALTER TABLE accounts
+ADD COLUMN daily_pix_limit NUMERIC(19,2) NOT NULL DEFAULT 5000.00;

@@ -34,6 +34,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -369,6 +370,7 @@ class PixServiceImplTest {
         Account sourceAccount = Account.builder()
                 .id(sourceAccountId)
                 .balance(new BigDecimal("500.00"))
+                .dailyPixLimit(new BigDecimal("5000.00"))
                 .status(AccountStatus.ACTIVE)
                 .customer(senderCustomer)
                 .build();
@@ -424,6 +426,14 @@ class PixServiceImplTest {
         when(accountRepository.findByIdForUpdate(destinationAccountId))
                 .thenReturn(Optional.of(destinationAccount));
 
+        when(transactionRepository.sumAmountByAccountAndPeriod(
+                eq(sourceAccountId),
+                eq(TransactionType.PIX),
+                eq(TransactionStatus.COMPLETED),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(BigDecimal.ZERO);
+
         when(transactionRepository.save(any(Transaction.class)))
                 .thenReturn(savedTransaction);
 
@@ -444,6 +454,15 @@ class PixServiceImplTest {
 
         assertThat(destinationAccount.getBalance())
                 .isEqualByComparingTo("300.00");
+
+        verify(transactionRepository)
+                .sumAmountByAccountAndPeriod(
+                        eq(sourceAccountId),
+                        eq(TransactionType.PIX),
+                        eq(TransactionStatus.COMPLETED),
+                        any(LocalDateTime.class),
+                        any(LocalDateTime.class)
+                );
 
         verify(transactionRepository)
                 .save(any(Transaction.class));
@@ -1139,5 +1158,207 @@ class PixServiceImplTest {
 
         verify(pixKeyRepository, never())
                 .delete(any(PixKey.class));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenDailyPixLimitIsExceeded() {
+
+        Long sourceAccountId = 1L;
+        Long destinationAccountId = 2L;
+
+        String senderEmail = "sender@email.com";
+        String pixKeyValue = "receiver@email.com";
+
+        BigDecimal amount = new BigDecimal("300.00");
+
+        PixTransferRequest request =
+                new PixTransferRequest(
+                        pixKeyValue,
+                        amount
+                );
+
+        Customer senderCustomer = Customer.builder()
+                .id(1L)
+                .email(senderEmail)
+                .build();
+
+        Account sourceAccount = Account.builder()
+                .id(sourceAccountId)
+                .balance(new BigDecimal("1000.00"))
+                .dailyPixLimit(new BigDecimal("5000.00"))
+                .status(AccountStatus.ACTIVE)
+                .customer(senderCustomer)
+                .build();
+
+        Account destinationAccount = Account.builder()
+                .id(destinationAccountId)
+                .balance(new BigDecimal("200.00"))
+                .status(AccountStatus.ACTIVE)
+                .build();
+
+        PixKey pixKey = PixKey.builder()
+                .id(1L)
+                .keyValue(pixKeyValue)
+                .account(destinationAccount)
+                .build();
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                senderEmail,
+                                null
+                        )
+                );
+
+        when(pixKeyRepository.findByKeyValue(pixKeyValue))
+                .thenReturn(Optional.of(pixKey));
+
+        when(accountRepository.findByIdForUpdate(sourceAccountId))
+                .thenReturn(Optional.of(sourceAccount));
+
+        when(accountRepository.findByIdForUpdate(destinationAccountId))
+                .thenReturn(Optional.of(destinationAccount));
+
+        // Cliente já enviou R$ 4.800 hoje
+        when(transactionRepository.sumAmountByAccountAndPeriod(
+                eq(sourceAccountId),
+                eq(TransactionType.PIX),
+                eq(TransactionStatus.COMPLETED),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(new BigDecimal("4800.00"));
+
+        assertThatThrownBy(() ->
+                pixService.transfer(
+                        sourceAccountId,
+                        request
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Limite diário de PIX excedido");
+
+        assertThat(sourceAccount.getBalance())
+                .isEqualByComparingTo("1000.00");
+
+        assertThat(destinationAccount.getBalance())
+                .isEqualByComparingTo("200.00");
+
+        verify(transactionRepository, never())
+                .save(any(Transaction.class));
+    }
+
+    @Test
+    void shouldAllowPixWhenDailyLimitIsExactlyReached() {
+
+        Long sourceAccountId = 1L;
+        Long destinationAccountId = 2L;
+
+        String senderEmail = "sender@email.com";
+        String pixKeyValue = "receiver@email.com";
+
+        BigDecimal amount = new BigDecimal("200.00");
+
+        PixTransferRequest request =
+                new PixTransferRequest(
+                        pixKeyValue,
+                        amount
+                );
+
+        Customer senderCustomer = Customer.builder()
+                .id(1L)
+                .email(senderEmail)
+                .build();
+
+        Account sourceAccount = Account.builder()
+                .id(sourceAccountId)
+                .balance(new BigDecimal("1000.00"))
+                .dailyPixLimit(new BigDecimal("5000.00"))
+                .status(AccountStatus.ACTIVE)
+                .customer(senderCustomer)
+                .build();
+
+        Account destinationAccount = Account.builder()
+                .id(destinationAccountId)
+                .balance(new BigDecimal("200.00"))
+                .status(AccountStatus.ACTIVE)
+                .build();
+
+        PixKey pixKey = PixKey.builder()
+                .id(1L)
+                .keyValue(pixKeyValue)
+                .account(destinationAccount)
+                .build();
+
+        Transaction savedTransaction = Transaction.builder()
+                .id(10L)
+                .type(TransactionType.PIX)
+                .status(TransactionStatus.COMPLETED)
+                .amount(amount)
+                .sourceAccount(sourceAccount)
+                .destinationAccount(destinationAccount)
+                .build();
+
+        TransactionResponse expectedResponse =
+                new TransactionResponse(
+                        10L,
+                        TransactionType.PIX,
+                        TransactionStatus.COMPLETED,
+                        amount,
+                        sourceAccountId,
+                        destinationAccountId,
+                        null,
+                        null,
+                        null
+                );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                senderEmail,
+                                null
+                        )
+                );
+
+        when(pixKeyRepository.findByKeyValue(pixKeyValue))
+                .thenReturn(Optional.of(pixKey));
+
+        when(accountRepository.findByIdForUpdate(sourceAccountId))
+                .thenReturn(Optional.of(sourceAccount));
+
+        when(accountRepository.findByIdForUpdate(destinationAccountId))
+                .thenReturn(Optional.of(destinationAccount));
+
+        // Já enviou R$ 4.800 no dia
+        when(transactionRepository.sumAmountByAccountAndPeriod(
+                eq(sourceAccountId),
+                eq(TransactionType.PIX),
+                eq(TransactionStatus.COMPLETED),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(new BigDecimal("4800.00"));
+
+        when(transactionRepository.save(any(Transaction.class)))
+                .thenReturn(savedTransaction);
+
+        when(transactionMapper.toResponse(savedTransaction))
+                .thenReturn(expectedResponse);
+
+        TransactionResponse result =
+                pixService.transfer(
+                        sourceAccountId,
+                        request
+                );
+
+        assertThat(result)
+                .isEqualTo(expectedResponse);
+
+        assertThat(sourceAccount.getBalance())
+                .isEqualByComparingTo("800.00");
+
+        assertThat(destinationAccount.getBalance())
+                .isEqualByComparingTo("400.00");
+
+        verify(transactionRepository)
+                .save(any(Transaction.class));
     }
 }
