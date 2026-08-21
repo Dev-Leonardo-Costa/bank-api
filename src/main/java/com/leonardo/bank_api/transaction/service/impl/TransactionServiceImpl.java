@@ -376,12 +376,19 @@ public class TransactionServiceImpl implements TransactionService {
                         direction
                 );
 
+        String counterparty =
+                resolveCounterparty(
+                        transaction,
+                        direction
+                );
+
         return new StatementTransactionResponse(
                 transaction.getId(),
                 transaction.getType(),
                 direction,
                 transaction.getAmount(),
                 description,
+                counterparty,
                 transaction.getCreatedAt()
         );
     }
@@ -433,5 +440,28 @@ public class TransactionServiceImpl implements TransactionService {
                             ? "PIX enviado"
                             : "PIX recebido";
         };
+    }
+
+    private String resolveCounterparty(
+            Transaction transaction,
+            TransactionDirection direction
+    ) {
+
+        if (transaction.getType() == TransactionType.DEPOSIT
+                || transaction.getType() == TransactionType.WITHDRAW) {
+
+            return null;
+        }
+
+        if (direction == TransactionDirection.DEBIT) {
+
+            return transaction.getDestinationAccount()
+                    .getCustomer()
+                    .getFullName();
+        }
+
+        return transaction.getSourceAccount()
+                .getCustomer()
+                .getFullName();
     }
 }

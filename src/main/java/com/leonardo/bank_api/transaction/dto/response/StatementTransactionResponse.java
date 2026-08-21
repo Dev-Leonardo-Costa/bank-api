@@ -14,6 +14,7 @@ public record StatementTransactionResponse(
         TransactionDirection direction,
         BigDecimal amount,
         String description,
+        String counterparty,
 
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
         LocalDateTime createdAt
