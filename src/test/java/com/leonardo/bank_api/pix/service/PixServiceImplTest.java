@@ -1400,20 +1400,51 @@ class PixServiceImplTest {
         when(accountRepository.save(account))
                 .thenReturn(account);
 
+        // Cliente já utilizou R$ 1.200 hoje
+        when(transactionRepository.sumAmountByAccountAndPeriod(
+                eq(accountId),
+                eq(TransactionType.PIX),
+                eq(TransactionStatus.COMPLETED),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(new BigDecimal("1200.00"));
+
         PixLimitResponse response =
                 pixService.updateDailyPixLimit(
                         accountId,
                         request
                 );
 
+        assertThat(response)
+                .isNotNull();
+
+        // Confirma que o limite foi atualizado
         assertThat(response.dailyPixLimit())
                 .isEqualByComparingTo("8000.00");
 
+        // Confirma quanto já foi utilizado hoje
+        assertThat(response.usedToday())
+                .isEqualByComparingTo("1200.00");
+
+        // 8000 - 1200 = 6800
+        assertThat(response.availableToday())
+                .isEqualByComparingTo("6800.00");
+
+        // Confirma alteração na própria Account
         assertThat(account.getDailyPixLimit())
                 .isEqualByComparingTo("8000.00");
 
         verify(accountRepository)
                 .save(account);
+
+        verify(transactionRepository)
+                .sumAmountByAccountAndPeriod(
+                        eq(accountId),
+                        eq(TransactionType.PIX),
+                        eq(TransactionStatus.COMPLETED),
+                        any(LocalDateTime.class),
+                        any(LocalDateTime.class)
+                );
     }
 
     @Test
@@ -1529,6 +1560,15 @@ class PixServiceImplTest {
         when(accountRepository.findById(accountId))
                 .thenReturn(Optional.of(account));
 
+        // Simula que o cliente já utilizou R$ 1.200 do limite hoje
+        when(transactionRepository.sumAmountByAccountAndPeriod(
+                eq(accountId),
+                eq(TransactionType.PIX),
+                eq(TransactionStatus.COMPLETED),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(new BigDecimal("1200.00"));
+
         PixLimitResponse response =
                 pixService.getDailyPixLimit(accountId);
 
@@ -1538,8 +1578,23 @@ class PixServiceImplTest {
         assertThat(response.dailyPixLimit())
                 .isEqualByComparingTo("5000.00");
 
+        assertThat(response.usedToday())
+                .isEqualByComparingTo("1200.00");
+
+        assertThat(response.availableToday())
+                .isEqualByComparingTo("3800.00");
+
         verify(accountRepository)
                 .findById(accountId);
+
+        verify(transactionRepository)
+                .sumAmountByAccountAndPeriod(
+                        eq(accountId),
+                        eq(TransactionType.PIX),
+                        eq(TransactionStatus.COMPLETED),
+                        any(LocalDateTime.class),
+                        any(LocalDateTime.class)
+                );
     }
 
     @Test

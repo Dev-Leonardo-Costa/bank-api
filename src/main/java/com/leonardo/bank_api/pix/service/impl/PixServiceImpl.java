@@ -32,10 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -278,7 +275,29 @@ public class PixServiceImpl implements PixService {
 
         validateOwnership(account);
 
-        return new PixLimitResponse(account.getDailyPixLimit());
+        LocalDate today = LocalDate.now();
+
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+
+        BigDecimal usedToday =
+                transactionRepository.sumAmountByAccountAndPeriod(
+                        accountId,
+                        TransactionType.PIX,
+                        TransactionStatus.COMPLETED,
+                        startOfDay,
+                        endOfDay
+                );
+
+        BigDecimal availableToday =
+                account.getDailyPixLimit()
+                        .subtract(usedToday);
+
+        return new PixLimitResponse(
+                account.getDailyPixLimit(),
+                usedToday,
+                availableToday
+        );
     }
 
     @Transactional
@@ -300,8 +319,28 @@ public class PixServiceImpl implements PixService {
 
         accountRepository.save(account);
 
-        return new PixLimitResponse(
+        LocalDate today = LocalDate.now();
+
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+
+        BigDecimal usedToday =
+                transactionRepository.sumAmountByAccountAndPeriod(
+                        accountId,
+                        TransactionType.PIX,
+                        TransactionStatus.COMPLETED,
+                        startOfDay,
+                        endOfDay
+                );
+
+        BigDecimal availableToday =
                 account.getDailyPixLimit()
+                        .subtract(usedToday);
+
+        return new PixLimitResponse(
+                account.getDailyPixLimit(),
+                usedToday,
+                availableToday
         );
     }
 
