@@ -550,7 +550,7 @@ Git
 ### 1. Clone o projeto
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
+git clone <https://github.com/Dev-Leonardo-Costa/bank-api>
 ```
 
 ### 2. Entre na pasta
