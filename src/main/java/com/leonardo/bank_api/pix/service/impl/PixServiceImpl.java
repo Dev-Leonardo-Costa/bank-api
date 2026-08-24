@@ -86,111 +86,11 @@ public class PixServiceImpl implements PixService {
     @Override
     public TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request) {
 
-        String normalizedKey = normalizePixKey(request.pixKey());
+        PixTransferContext context = preparePixTransfer(sourceAccountId, request.pixKey());
 
-        PixKey pixKey = pixKeyRepository.findByKeyValue(normalizedKey)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Chave PIX não encontrada"
-                        )
-                );
+        validateOwnership(context.sourceAccount());
 
-        Long destinationAccountId = pixKey.getAccount().getId();
-
-        if (sourceAccountId.equals(destinationAccountId)) {
-            throw new BusinessException(
-                    "Não é possível realizar PIX para a própria conta"
-            );
-        }
-
-        Long firstId = Math.min(
-                sourceAccountId,
-                destinationAccountId
-        );
-
-        Long secondId = Math.max(
-                sourceAccountId,
-                destinationAccountId
-        );
-
-        Account firstAccount =
-                accountRepository.findByIdForUpdate(firstId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Conta não encontrada"
-                                )
-                        );
-
-        Account secondAccount =
-                accountRepository.findByIdForUpdate(secondId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Conta não encontrada"
-                                )
-                        );
-
-        Account sourceAccount =
-                firstAccount.getId().equals(sourceAccountId)
-                        ? firstAccount
-                        : secondAccount;
-
-        Account destinationAccount =
-                firstAccount.getId().equals(destinationAccountId)
-                        ? firstAccount
-                        : secondAccount;
-
-        validateOwnership(sourceAccount);
-
-        if (sourceAccount.getStatus() != AccountStatus.ACTIVE) {
-            throw new BusinessException(
-                    "A conta de origem não está ativa"
-            );
-        }
-
-        if (destinationAccount.getStatus() != AccountStatus.ACTIVE) {
-            throw new BusinessException(
-                    "A conta de destino não está ativa"
-            );
-        }
-
-        if (sourceAccount.getBalance()
-                .compareTo(request.amount()) < 0) {
-
-            throw new BusinessException(
-                    "Saldo insuficiente"
-            );
-        }
-
-        validateDailyPixLimit(
-                sourceAccount,
-                request.amount()
-        );
-
-        sourceAccount.setBalance(
-                sourceAccount.getBalance()
-                        .subtract(request.amount())
-        );
-
-        destinationAccount.setBalance(
-                destinationAccount.getBalance()
-                        .add(request.amount())
-        );
-
-        accountRepository.save(sourceAccount);
-        accountRepository.save(destinationAccount);
-
-        Transaction transaction = Transaction.builder()
-                .type(TransactionType.PIX)
-                .status(TransactionStatus.COMPLETED)
-                .amount(request.amount())
-                .sourceAccount(sourceAccount)
-                .destinationAccount(destinationAccount)
-                .build();
-
-        Transaction savedTransaction =
-                transactionRepository.save(transaction);
-
-        return transactionMapper.toResponse(savedTransaction);
+        return executePixTransfer(context, request.amount());
     }
 
     @Transactional(readOnly = true)
@@ -344,6 +244,18 @@ public class PixServiceImpl implements PixService {
         );
     }
 
+    @Transactional
+    @Override
+    public TransactionResponse executeScheduledPix(Long sourceAccountId, String pixKey, BigDecimal amount) {
+        PixTransferContext context =
+                preparePixTransfer(
+                        sourceAccountId,
+                        pixKey
+                );
+
+        return executePixTransfer(context, amount);
+    }
+
     private PixKeyValidator getValidator(PixKeyType type) {
 
         return validators.stream()
@@ -436,9 +348,8 @@ public class PixServiceImpl implements PixService {
 
         return switch (type) {
 
-            case CPF ->
-                    "***.***.***-" +
-                            keyValue.substring(keyValue.length() - 2);
+            case CPF -> "***.***.***-" +
+                    keyValue.substring(keyValue.length() - 2);
 
             case EMAIL -> {
                 String[] parts = keyValue.split("@");
@@ -448,14 +359,12 @@ public class PixServiceImpl implements PixService {
                         + parts[1];
             }
 
-            case PHONE ->
-                    "+55 (***) *****-"
-                            + keyValue.substring(
-                            keyValue.length() - 4
-                    );
+            case PHONE -> "+55 (***) *****-"
+                    + keyValue.substring(
+                    keyValue.length() - 4
+            );
 
-            case RANDOM ->
-                    keyValue.substring(0, 8) + "****";
+            case RANDOM -> keyValue.substring(0, 8) + "****";
         };
 
     }
@@ -490,5 +399,133 @@ public class PixServiceImpl implements PixService {
                     "Limite diário de PIX excedido"
             );
         }
+    }
+
+    private record PixTransferContext(Account sourceAccount, Account destinationAccount) {
+    }
+
+    private PixTransferContext preparePixTransfer(Long sourceAccountId, String pixKeyValue) {
+
+        String normalizedKey =
+                normalizePixKey(pixKeyValue);
+
+        PixKey pixKey = pixKeyRepository
+                .findByKeyValue(normalizedKey)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Chave PIX não encontrada"
+                        )
+                );
+
+        Long destinationAccountId =
+                pixKey.getAccount().getId();
+
+        if (sourceAccountId.equals(destinationAccountId)) {
+            throw new BusinessException(
+                    "Não é possível realizar PIX para a própria conta"
+            );
+        }
+
+        Long firstId =
+                Math.min(
+                        sourceAccountId,
+                        destinationAccountId
+                );
+
+        Long secondId =
+                Math.max(
+                        sourceAccountId,
+                        destinationAccountId
+                );
+
+        Account firstAccount =
+                accountRepository.findByIdForUpdate(firstId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Conta não encontrada"
+                                )
+                        );
+
+        Account secondAccount =
+                accountRepository.findByIdForUpdate(secondId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Conta não encontrada"
+                                )
+                        );
+
+        Account sourceAccount =
+                firstAccount.getId().equals(sourceAccountId)
+                        ? firstAccount
+                        : secondAccount;
+
+        Account destinationAccount =
+                firstAccount.getId().equals(destinationAccountId)
+                        ? firstAccount
+                        : secondAccount;
+
+        return new PixTransferContext(sourceAccount, destinationAccount);
+    }
+
+    private TransactionResponse executePixTransfer(PixTransferContext context, BigDecimal amount) {
+
+        Account sourceAccount =
+                context.sourceAccount();
+
+        Account destinationAccount =
+                context.destinationAccount();
+
+        if (sourceAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new BusinessException(
+                    "A conta de origem não está ativa"
+            );
+        }
+
+        if (destinationAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new BusinessException(
+                    "A conta de destino não está ativa"
+            );
+        }
+
+        if (sourceAccount.getBalance()
+                .compareTo(amount) < 0) {
+
+            throw new BusinessException(
+                    "Saldo insuficiente"
+            );
+        }
+
+        validateDailyPixLimit(
+                sourceAccount,
+                amount
+        );
+
+        sourceAccount.setBalance(
+                sourceAccount.getBalance()
+                        .subtract(amount)
+        );
+
+        destinationAccount.setBalance(
+                destinationAccount.getBalance()
+                        .add(amount)
+        );
+
+        accountRepository.save(sourceAccount);
+        accountRepository.save(destinationAccount);
+
+        Transaction transaction =
+                Transaction.builder()
+                        .type(TransactionType.PIX)
+                        .status(TransactionStatus.COMPLETED)
+                        .amount(amount)
+                        .sourceAccount(sourceAccount)
+                        .destinationAccount(destinationAccount)
+                        .build();
+
+        Transaction savedTransaction =
+                transactionRepository.save(transaction);
+
+        return transactionMapper
+                .toResponse(savedTransaction);
     }
 }

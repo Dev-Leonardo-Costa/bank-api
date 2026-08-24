@@ -23,7 +23,6 @@ import java.security.SecureRandom;
 public class AccountServiceImpl implements AccountService {
 
     private static final String DEFAULT_AGENCY = "0001";
-
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
     private final AccountMapper accountMapper;
@@ -41,13 +40,7 @@ public class AccountServiceImpl implements AccountService {
                         new ResourceNotFoundException("Cliente não encontrado")
                 );
 
-        Account account = Account.builder()
-                .number(generateAccountNumber())
-                .agency(DEFAULT_AGENCY)
-                .balance(BigDecimal.ZERO)
-                .status(AccountStatus.ACTIVE)
-                .customer(customer)
-                .build();
+        Account account = accountMapper.toEntity(customer, generateAccountNumber(), DEFAULT_AGENCY);
 
         Account savedAccount = accountRepository.save(account);
 

@@ -26,4 +26,8 @@ public interface PixService {
     PixLimitResponse getDailyPixLimit(Long accountId);
 
     PixLimitResponse updateDailyPixLimit(Long accountId, UpdatePixLimitRequest request);
+
+//    void executeScheduledPix(Long sourceAccountId, String pixKey, BigDecimal amount);
+
+    TransactionResponse executeScheduledPix(Long sourceAccountId, String pixKey, BigDecimal amount);
 }
