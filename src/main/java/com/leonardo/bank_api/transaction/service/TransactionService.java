@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.transaction;
+package com.leonardo.bank_api.transaction.service;
 
 import com.leonardo.bank_api.shared.enums.TransactionType;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;

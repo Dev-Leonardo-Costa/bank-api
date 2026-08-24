@@ -8,7 +8,7 @@ import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
 import com.leonardo.bank_api.transaction.dto.response.StatementTransactionResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionReceiptResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
-import com.leonardo.bank_api.transaction.TransactionService;
+import com.leonardo.bank_api.transaction.service.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

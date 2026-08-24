@@ -1,4 +1,4 @@
-package com.leonardo.bank_api.transaction.impl;
+package com.leonardo.bank_api.transaction.service.impl;
 
 import com.leonardo.bank_api.account.entity.Account;
 import com.leonardo.bank_api.account.repository.AccountRepository;
@@ -15,7 +15,7 @@ import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
-import com.leonardo.bank_api.transaction.TransactionService;
+import com.leonardo.bank_api.transaction.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

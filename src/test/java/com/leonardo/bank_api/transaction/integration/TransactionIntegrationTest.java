@@ -7,7 +7,7 @@ import com.leonardo.bank_api.customer.repository.CustomerRepository;
 import com.leonardo.bank_api.shared.enums.AccountStatus;
 import com.leonardo.bank_api.shared.enums.TransactionStatus;
 import com.leonardo.bank_api.shared.enums.TransactionType;
-import com.leonardo.bank_api.transaction.TransactionService;
+import com.leonardo.bank_api.transaction.service.TransactionService;
 import com.leonardo.bank_api.transaction.dto.response.TransactionReceiptResponse;
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;

@@ -11,7 +11,7 @@ import com.leonardo.bank_api.transaction.dto.response.TransactionReceiptResponse
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
-import com.leonardo.bank_api.transaction.impl.TransactionServiceImpl;
+import com.leonardo.bank_api.transaction.service.impl.TransactionServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
