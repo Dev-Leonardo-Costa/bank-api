@@ -34,5 +34,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/bank-api:latest
-            ghcr.io/${{ github.repository_owner }}/bank-api:${{ github.sha }}
+            ghcr.io/dev-leonardo-costa/bank-api:latest
+            ghcr.io/dev-leonardo-costa/bank-api:${{ github.sha }}
