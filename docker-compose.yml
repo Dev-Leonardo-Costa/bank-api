@@ -3,14 +3,52 @@ services:
   postgres:
     image: postgres:17
     container_name: bank-postgres
+
     environment:
       POSTGRES_DB: bank
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+
     ports:
       - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bank"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  bank-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: bank-api:1.0.0
+    container_name: bank-api
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bank
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      SECURITY_JWT_SECRET: dGVzdC1zZWNyZXQta2V5LWZvci1iYW5rLWFwaS0xMjM0NTY3ODkwMTIzNDU2
+      SECURITY_JWT_EXPIRATION: 3600000
+
+    ports:
+      - "8080:8080"
+
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
