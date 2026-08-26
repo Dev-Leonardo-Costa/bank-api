@@ -1,5 +1,6 @@
 package com.leonardo.bank_api.account.controller;
 
+import com.leonardo.bank_api.account.controller.accountcontrollerdocs.AccountControllerDocs;
 import com.leonardo.bank_api.account.dto.AccountResponse;
 import com.leonardo.bank_api.account.dto.CreateAccountRequest;
 import com.leonardo.bank_api.account.service.AccountService;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/accounts")
 @RequiredArgsConstructor
-public class AccountController {
+public class AccountController implements AccountControllerDocs {
 
     private final AccountService accountService;
 

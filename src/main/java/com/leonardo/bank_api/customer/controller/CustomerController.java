@@ -1,5 +1,6 @@
 package com.leonardo.bank_api.customer.controller;
 
+import com.leonardo.bank_api.customer.controller.customercontrollerdocs.CustomerControllerDocs;
 import com.leonardo.bank_api.customer.dto.request.CreateCustomerRequest;
 import com.leonardo.bank_api.customer.dto.response.CustomerResponse;
 import com.leonardo.bank_api.customer.service.CustomerService;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/customers")
 @RequiredArgsConstructor
-public class CustomerController {
+public class CustomerController implements CustomerControllerDocs {
 
     private final CustomerService customerService;
 

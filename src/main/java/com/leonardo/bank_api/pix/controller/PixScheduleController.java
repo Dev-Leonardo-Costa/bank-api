@@ -1,5 +1,6 @@
 package com.leonardo.bank_api.pix.controller;
 
+import com.leonardo.bank_api.pix.controller.pixcontrollerdocs.PixScheduleControllerDocs;
 import com.leonardo.bank_api.pix.dto.request.CreatePixScheduleRequest;
 import com.leonardo.bank_api.pix.dto.response.PixScheduleResponse;
 import com.leonardo.bank_api.pix.service.PixScheduleService;
@@ -14,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/pix/schedules")
 @RequiredArgsConstructor
-public class PixScheduleController {
+public class PixScheduleController implements PixScheduleControllerDocs {
 
     private final PixScheduleService pixScheduleService;
 

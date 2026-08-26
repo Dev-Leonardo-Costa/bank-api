@@ -1,5 +1,6 @@
 package com.leonardo.bank_api.pix.controller;
 
+import com.leonardo.bank_api.pix.controller.pixcontrollerdocs.PixControllerDocs;
 import com.leonardo.bank_api.pix.dto.request.CreatePixKeyRequest;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
 import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
@@ -20,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/pix")
 @RequiredArgsConstructor
-public class PixController {
+public class PixController implements PixControllerDocs {
 
     private final PixService pixService;
 

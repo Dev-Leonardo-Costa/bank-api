@@ -2,6 +2,7 @@ package com.leonardo.bank_api.transaction.controller;
 
 import com.leonardo.bank_api.shared.dto.PagedResponse;
 import com.leonardo.bank_api.shared.enums.TransactionType;
+import com.leonardo.bank_api.transaction.controller.transactioncontrollerdocs.TransactionControllerDocs;
 import com.leonardo.bank_api.transaction.dto.request.DepositRequest;
 import com.leonardo.bank_api.transaction.dto.request.TransferRequest;
 import com.leonardo.bank_api.transaction.dto.request.WithdrawRequest;
@@ -9,6 +10,7 @@ import com.leonardo.bank_api.transaction.dto.response.StatementTransactionRespon
 import com.leonardo.bank_api.transaction.dto.response.TransactionReceiptResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.service.TransactionService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,10 +23,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/transactions")
 @RequiredArgsConstructor
-public class TransactionController {
+public class TransactionController implements TransactionControllerDocs {
 
     private final TransactionService transactionService;
 
