@@ -1,10 +1,10 @@
 # 🏦 Bank API
 
-API REST para simulação de operações bancárias, desenvolvida com **Java e Spring Boot**, com foco em regras de negócio, segurança, consistência transacional, testes automatizados e boas práticas de desenvolvimento backend.
+API REST para simulação de operações bancárias, desenvolvida com **Java 21 e Spring Boot**, com foco em regras de negócio, segurança, consistência transacional, testes automatizados, documentação, containerização e CI/CD.
 
 O projeto simula funcionalidades encontradas em sistemas financeiros, incluindo gerenciamento de clientes e contas, transferências via PIX, limites diários, extrato bancário, comprovantes e agendamento de PIX.
 
-> 💡 O objetivo deste projeto vai além de implementar endpoints CRUD. A proposta é trabalhar conceitos encontrados em aplicações backend reais, como concorrência, segurança, transações financeiras, migrations, processamento agendado e testes de integração.
+> 💡 O objetivo deste projeto vai além de implementar endpoints CRUD. A proposta é trabalhar conceitos encontrados em aplicações backend reais, como concorrência, segurança, transações financeiras, migrations, processamento agendado, testes de integração, documentação de API, containerização e entrega contínua.
 
 ---
 
@@ -52,7 +52,9 @@ O projeto simula funcionalidades encontradas em sistemas financeiros, incluindo 
 - Validação da chave PIX de destino
 - Controle de propriedade da conta
 - Processamento automático com Spring Scheduler
-- Estados do agendamento:
+- Tratamento de sucesso e falha durante o processamento
+
+Estados do agendamento:
 
 ```text
 SCHEDULED
@@ -96,7 +98,7 @@ O PIX agendado é persistido inicialmente como `SCHEDULED` e posteriormente proc
 - API stateless
 - Autorização baseada no usuário autenticado
 - Validação de propriedade das contas
-- Proteção de operações bancárias
+- Proteção das operações bancárias
 - Controle de acesso aos comprovantes
 
 ---
@@ -116,11 +118,19 @@ O PIX agendado é persistido inicialmente como `SCHEDULED` e posteriormente proc
 | Flyway | Versionamento do banco |
 | MapStruct | Mapeamento Entity/DTO |
 | Bean Validation | Validação das requisições |
-| Docker | Ambiente de desenvolvimento |
-| Testcontainers | Testes com PostgreSQL real |
+| Swagger UI | Interface interativa de documentação e testes |
+| OpenAPI | Especificação da API REST |
+| Docker | Containerização da aplicação |
+| Docker Compose | Orquestração local |
+| Testcontainers | Testes de integração com PostgreSQL |
 | JUnit 5 | Testes automatizados |
 | Mockito | Testes unitários |
-| Maven | Build e dependências |
+| AssertJ | Assertions nos testes |
+| JaCoCo | Cobertura de testes |
+| GitHub Actions | CI/CD |
+| GitHub Container Registry | Registry das imagens Docker |
+| Render | Deploy da aplicação e PostgreSQL |
+| Maven | Build e gerenciamento de dependências |
 | Lombok | Redução de código boilerplate |
 
 ---
@@ -131,29 +141,30 @@ O projeto utiliza uma arquitetura em camadas, mantendo responsabilidades separad
 
 ```text
 Client
-   │
-   ▼
+  │
+  ▼
 Controller
-   │
-   ▼
+  │
+  ▼
 Service
-   │
-   ├────► Mapper
-   │
-   ▼
+  │
+  ├────► Mapper
+  │
+  ▼
 Repository
-   │
-   ▼
+  │
+  ▼
 PostgreSQL
 ```
 
-Estrutura simplificada do projeto:
+Estrutura simplificada:
 
 ```text
 src/main/java/com/leonardo/bank_api
 │
 ├── account
 │   ├── controller
+│   ├── controllerdocs
 │   ├── dto
 │   ├── entity
 │   ├── mapper
@@ -162,6 +173,7 @@ src/main/java/com/leonardo/bank_api
 │
 ├── customer
 │   ├── controller
+│   ├── controllerdocs
 │   ├── dto
 │   ├── entity
 │   ├── mapper
@@ -170,6 +182,7 @@ src/main/java/com/leonardo/bank_api
 │
 ├── pix
 │   ├── controller
+│   ├── controllerdocs
 │   ├── dto
 │   ├── entity
 │   ├── enums
@@ -180,6 +193,7 @@ src/main/java/com/leonardo/bank_api
 │
 ├── transaction
 │   ├── controller
+│   ├── controllerdocs
 │   ├── dto
 │   ├── entity
 │   ├── mapper
@@ -187,15 +201,14 @@ src/main/java/com/leonardo/bank_api
 │   └── service
 │
 ├── security
-│
+├── config
 ├── common
-│
 └── BankApiApplication.java
 ```
 
 ---
 
-## ⚡ Fluxo de uma transferência PIX
+## ⚡ Fluxo de uma Transferência PIX
 
 Uma transferência PIX passa por diversas validações antes da movimentação financeira.
 
@@ -255,13 +268,13 @@ As contas são acessadas seguindo uma ordem determinística baseada em seus iden
 Exemplo:
 
 ```text
+Transferência:
 Conta 10 → Conta 5
 
-Primeiro lock:
-Conta 5
+Ordem dos locks:
 
-Segundo lock:
-Conta 10
+1º → Conta 5
+2º → Conta 10
 ```
 
 Essa estratégia ajuda a reduzir problemas de concorrência e o risco de deadlocks durante transferências simultâneas.
@@ -278,8 +291,9 @@ Antes da transferência, a aplicação verifica:
 Valor já transferido no dia
             +
 Valor da nova transferência
-            ↓
-Limite diário da conta
+            │
+            ▼
+     Limite diário
 ```
 
 Caso o valor ultrapasse o limite configurado, a transferência não é realizada.
@@ -292,13 +306,13 @@ O projeto possui suporte para agendamento de PIX.
 
 Ao criar um agendamento:
 
-```text
+```http
 POST /pix/schedules
 ```
 
 o PIX ainda não é executado.
 
-Ele é armazenado inicialmente com:
+Ele é armazenado inicialmente como:
 
 ```text
 SCHEDULED
@@ -310,12 +324,12 @@ O processamento automático utiliza o **Spring Scheduler**.
 PixScheduleProcessor
         │
         ▼
-Busca:
+Busca agendamentos:
 status = SCHEDULED
 scheduledAt <= agora
         │
         ▼
-PROCESSING
+    PROCESSING
         │
         ▼
 Execução interna do PIX
@@ -326,7 +340,7 @@ Execução interna do PIX
    COMPLETED          FAILED
 ```
 
-A execução interna reutiliza as regras financeiras da transferência PIX, como:
+A execução interna reutiliza as regras financeiras da transferência PIX, incluindo:
 
 - validação de saldo;
 - validação das contas;
@@ -343,7 +357,7 @@ O processamento agendado não depende de uma requisição HTTP ou de um JWT ativ
 
 O extrato permite visualizar as movimentações realizadas em uma conta.
 
-Exemplo:
+Exemplo de PIX enviado:
 
 ```json
 {
@@ -401,9 +415,91 @@ A aplicação valida se o usuário autenticado participou da transação antes d
 
 ---
 
+## 📚 Documentação da API
+
+A Bank API possui documentação interativa utilizando **Swagger UI e OpenAPI**.
+
+A documentação foi organizada para evitar excesso de anotações diretamente nos controllers.
+
+```text
+Controller
+    │
+    └── Responsável pelos endpoints HTTP
+
+ControllerDocs
+    │
+    ├── @Tag
+    ├── @Operation
+    ├── @ApiResponse
+    └── @SecurityRequirement
+
+DTO
+    │
+    └── @Schema
+         ├── descrição
+         ├── exemplos
+         └── formato dos campos
+
+OpenApiConfig
+    │
+    ├── informações da API
+    └── autenticação JWT
+```
+
+Essa abordagem mantém os Controllers mais enxutos e concentra a documentação OpenAPI em contratos específicos.
+
+### 🔐 Autenticação pelo Swagger
+
+O Swagger está integrado à autenticação JWT.
+
+Após realizar o login e obter um token, é possível utilizar o botão **Authorize** para autenticar as requisições realizadas pela própria interface.
+
+```text
+Login
+  │
+  ▼
+JWT
+  │
+  ▼
+Authorize
+  │
+  ▼
+Endpoints protegidos 🔒
+```
+
+### 🧪 Swagger UI
+
+Em desenvolvimento:
+
+```text
+http://localhost:8081/swagger-ui/index.html
+```
+
+Especificação OpenAPI:
+
+```text
+http://localhost:8081/v3/api-docs
+```
+
+A interface permite visualizar e testar operações relacionadas a:
+
+- autenticação;
+- clientes;
+- contas;
+- chaves PIX;
+- transferências PIX;
+- limite diário;
+- PIX agendado;
+- extrato;
+- comprovantes.
+
+Os DTOs utilizam `@Schema` para exibir exemplos e descrições diretamente na documentação.
+
+---
+
 ## 🧪 Testes Automatizados
 
-O projeto possui testes unitários e testes de integração.
+O projeto possui testes unitários e testes de integração para validar regras de negócio e integração com a infraestrutura.
 
 ### Testes Unitários
 
@@ -414,8 +510,6 @@ JUnit 5
 Mockito
 AssertJ
 ```
-
-Eles validam as regras de negócio de maneira isolada.
 
 Entre os cenários testados estão:
 
@@ -428,7 +522,11 @@ Entre os cenários testados estão:
 - validações de segurança;
 - geração de comprovante;
 - transação inexistente;
-- usuário sem acesso à transação.
+- usuário sem acesso à transação;
+- criação de PIX agendado;
+- listagem de agendamentos;
+- processamento do PIX agendado;
+- falha durante execução de PIX agendado.
 
 ### Testes de Integração
 
@@ -438,14 +536,14 @@ Durante os testes, uma instância real do PostgreSQL é criada automaticamente.
 
 ```text
 JUnit
-   │
-   ▼
+  │
+  ▼
 Spring Boot
-   │
-   ▼
+  │
+  ▼
 Hibernate / JPA
-   │
-   ▼
+  │
+  ▼
 PostgreSQL
 (Testcontainers)
 ```
@@ -460,9 +558,31 @@ mvn test
 
 ---
 
+## 📈 Cobertura de Testes com JaCoCo
+
+O projeto utiliza **JaCoCo** para acompanhar a cobertura dos testes automatizados.
+
+A cobertura é utilizada como indicador para identificar partes da aplicação que ainda precisam de cenários de teste.
+
+Execute:
+
+```bash
+mvn clean test
+```
+
+O relatório HTML é gerado em:
+
+```text
+target/site/jacoco/index.html
+```
+
+O objetivo não é apenas atingir um percentual de cobertura, mas utilizar a métrica como apoio para evolução da qualidade do código.
+
+---
+
 ## 🗄️ Versionamento do Banco
 
-O projeto utiliza **Flyway** para gerenciamento das alterações do banco.
+O projeto utiliza **Flyway** para gerenciamento das alterações do banco de dados.
 
 As migrations ficam em:
 
@@ -481,54 +601,252 @@ V2__create_accounts_table.sql
 V8__create_pix_schedules_table.sql
 ```
 
-Isso permite que o banco seja criado e atualizado de maneira reproduzível e versionada.
+Isso permite que o banco seja criado e atualizado de maneira reproduzível e versionada nos diferentes ambientes.
+
+---
+
+## 🌎 Configuração por Ambiente
+
+A aplicação possui configurações separadas por ambiente:
+
+```text
+application.yml
+│
+├── application-dev.yml
+├── application-test.yml
+└── application-prod.yml
+```
+
+### Desenvolvimento
+
+```text
+SPRING_PROFILES_ACTIVE=dev
+```
+
+Utilizado durante o desenvolvimento local.
+
+### Testes
+
+```text
+SPRING_PROFILES_ACTIVE=test
+```
+
+Utilizado pelos testes automatizados e testes de integração.
+
+### Produção
+
+```text
+SPRING_PROFILES_ACTIVE=prod
+```
+
+Utilizado na execução containerizada e no ambiente de produção.
+
+Credenciais, secrets e configurações específicas de infraestrutura são externalizadas através de variáveis de ambiente.
+
+> ⚠️ Secrets, senhas e tokens reais não devem ser versionados no repositório.
 
 ---
 
 ## 🐳 Docker
 
-O PostgreSQL pode ser executado utilizando Docker Compose.
+A aplicação é totalmente containerizada utilizando **Docker**.
 
-Exemplo:
+O Dockerfile utiliza **Multi-stage Build**, separando o ambiente responsável pela compilação do ambiente utilizado para executar a aplicação.
 
-```yaml
-services:
-
-  postgres:
-    image: postgres:17
-    container_name: bank-postgres
-
-    environment:
-      POSTGRES_DB: bank
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-
-    ports:
-      - "5432:5432"
-
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+```text
+Código fonte
+     │
+     ▼
+Maven + Java 21
+     │
+     ▼
+Build
+     │
+     ▼
+JAR
+     │
+     ▼
+Java 21 Runtime
+     │
+     ▼
+Bank API
 ```
 
-Para iniciar:
+Essa abordagem mantém o processo de build separado da imagem utilizada em runtime.
+
+### Docker Compose
+
+No ambiente local, a API e o PostgreSQL podem ser executados através do Docker Compose:
+
+```text
+Docker Compose
+│
+├── bank-api
+│   └── Spring Boot / Java 21
+│
+└── bank-postgres
+    └── PostgreSQL 17
+```
+
+O PostgreSQL possui `healthcheck`, permitindo que a aplicação aguarde o banco estar disponível antes da inicialização.
+
+Para construir e iniciar:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Para verificar:
+Verificar os containers:
 
 ```bash
 docker ps
 ```
 
-Para parar:
+Acompanhar os logs:
+
+```bash
+docker logs -f bank-api
+```
+
+Parar os containers:
 
 ```bash
 docker compose down
+```
+
+Para remover também os volumes locais:
+
+```bash
+docker compose down -v
+```
+
+---
+
+## 🔄 CI/CD
+
+O projeto possui uma esteira de **Integração Contínua e Entrega Contínua utilizando GitHub Actions**.
+
+O objetivo é automatizar a validação do código, testes, build e publicação da imagem da aplicação.
+
+```text
+Developer
+    │
+    ▼
+Git Push
+    │
+    ▼
+GitHub
+    │
+    ▼
+GitHub Actions
+    │
+    ├──── CI ─────────────────────┐
+    │                             │
+    │                         Testes
+    │                             │
+    │                      ├── JUnit
+    │                      ├── Mockito
+    │                      ├── Testcontainers
+    │                      └── JaCoCo
+    │                             │
+    │                             ▼
+    │                           Build
+    │                             │
+    └───────────────┬─────────────┘
+                    │
+                    ▼
+              Docker Build
+                    │
+                    ▼
+        GitHub Container Registry
+                    │
+                    ▼
+                 Deploy
+                    │
+                    ▼
+                 Render
+```
+
+### Continuous Integration
+
+Durante o CI são executados:
+
+- checkout do código;
+- configuração do Java 21;
+- cache das dependências Maven;
+- testes unitários;
+- testes de integração;
+- Testcontainers com PostgreSQL;
+- geração da cobertura com JaCoCo;
+- build da aplicação.
+
+Falhas nessas etapas interrompem o pipeline.
+
+### Continuous Delivery
+
+Após a validação do código, uma nova imagem Docker é construída.
+
+A imagem é publicada no **GitHub Container Registry (GHCR)**.
+
+São utilizadas tags como:
+
+```text
+latest
+SHA do commit
+```
+
+O SHA permite relacionar uma determinada imagem Docker ao commit que originou aquele artefato, melhorando a rastreabilidade das versões.
+
+---
+
+## ☁️ Deploy
+
+A aplicação possui deploy em ambiente cloud utilizando **Render**.
+
+A Bank API executa de forma containerizada e utiliza PostgreSQL configurado para o ambiente de produção.
+
+```text
+Internet
+   │
+   ▼
+Render
+   │
+   ├── Bank API
+   │      │
+   │      ▼
+   │ Spring Boot
+   │
+   └────► PostgreSQL
+```
+
+O ambiente de produção utiliza:
+
+```text
+SPRING_PROFILES_ACTIVE=prod
+```
+
+As configurações de banco de dados e segurança são fornecidas através de variáveis de ambiente.
+
+O Flyway executa as migrations necessárias durante a inicialização da aplicação.
+
+### 🌐 API em Produção
+
+A aplicação está disponível em ambiente cloud através do Render.
+
+> URL pública da API: `ADICIONE_AQUI_SUA_URL_DO_RENDER`
+
+### 📚 Swagger em Produção
+
+Depois de inserir a URL pública:
+
+```text
+https://SUA-URL/swagger-ui/index.html
+```
+
+OpenAPI JSON:
+
+```text
+https://SUA-URL/v3/api-docs
 ```
 
 ---
@@ -547,49 +865,52 @@ Docker Compose
 Git
 ```
 
-### 1. Clone o projeto
+### Opção 1 — Executar com Docker
+
+Clone o projeto:
 
 ```bash
-git clone <https://github.com/Dev-Leonardo-Costa/bank-api>
+git clone https://github.com/Dev-Leonardo-Costa/bank-api.git
 ```
 
-### 2. Entre na pasta
+Entre na pasta:
 
 ```bash
 cd bank-api
 ```
 
-### 3. Suba o PostgreSQL
+Configure as variáveis de ambiente necessárias.
+
+Depois:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-### 4. Configure as variáveis de ambiente
+### Opção 2 — Executar pelo Maven
 
-Configure as propriedades necessárias para execução da aplicação, principalmente o segredo utilizado pelo JWT.
-
-Exemplo:
+Configure:
 
 ```text
+SPRING_PROFILES_ACTIVE=dev
 SECURITY_JWT_SECRET=<sua-chave-secreta>
 ```
 
-> ⚠️ Nunca versione secrets, senhas ou tokens reais no GitHub.
+Certifique-se de que o PostgreSQL está disponível.
 
-### 5. Execute a aplicação
+Depois:
 
 ```bash
 mvn spring-boot:run
 ```
 
-Ou gere o `.jar`:
+Também é possível gerar o `.jar`:
 
 ```bash
 mvn clean package
 ```
 
-Depois:
+e executar:
 
 ```bash
 java -jar target/bank-api-*.jar
@@ -601,7 +922,7 @@ java -jar target/bank-api-*.jar
 
 Os endpoints protegidos utilizam JWT.
 
-Após autenticar, envie o token no header:
+Após autenticar, envie o token:
 
 ```http
 Authorization: Bearer <token>
@@ -609,11 +930,23 @@ Authorization: Bearer <token>
 
 O usuário autenticado é utilizado para validar acesso às contas e operações bancárias.
 
+No Swagger, o token também pode ser configurado através do botão:
+
+```text
+Authorize
+```
+
 ---
 
 ## 📡 Exemplos de Endpoints
 
-### PIX
+### Login
+
+```http
+POST /auth/login
+```
+
+### Transferência PIX
 
 ```http
 POST /pix/transfer
@@ -643,13 +976,11 @@ GET /transactions/accounts/{accountId}/statement?page=0&size=10
 GET /transactions/{transactionId}/receipt
 ```
 
-> Os endpoints podem evoluir conforme novas funcionalidades forem adicionadas ao projeto.
+> Consulte o Swagger para visualizar requests, responses, exemplos e códigos HTTP documentados.
 
 ---
 
 ## 🧠 Decisões Técnicas
-
-Algumas decisões importantes adotadas durante o desenvolvimento:
 
 ### DTOs
 
@@ -657,27 +988,46 @@ As entidades JPA não são expostas diretamente pela API.
 
 ```text
 Request DTO
-    ↓
+    │
+    ▼
 Service
-    ↓
+    │
+    ▼
 Entity
-    ↓
+    │
+    ▼
 Mapper
-    ↓
+    │
+    ▼
 Response DTO
 ```
 
 ### MapStruct
 
-O MapStruct é utilizado para reduzir mapeamentos manuais entre entidades e DTOs.
+O MapStruct é utilizado para reduzir mapeamentos manuais entre entidades e DTOs e manter essa responsabilidade separada da camada de serviço.
+
+### Documentação desacoplada dos Controllers
+
+As anotações OpenAPI específicas dos endpoints foram concentradas em interfaces `ControllerDocs`.
+
+```text
+Controller
+    implements
+        ↓
+ControllerDocs
+```
+
+Isso reduz o excesso de anotações nos controllers e mantém a documentação organizada.
 
 ### Flyway
 
-Alterações no banco são versionadas e reproduzíveis.
+Alterações estruturais do banco são versionadas através de migrations, permitindo reproduzir a estrutura nos diferentes ambientes.
 
-### Lock em operações financeiras
+### Lock em Operações Financeiras
 
-Transferências concorrentes exigem controle para evitar inconsistência de saldo.
+Transferências concorrentes exigem controle para evitar inconsistências de saldo.
+
+As contas envolvidas são bloqueadas seguindo uma ordem determinística, reduzindo o risco de deadlocks.
 
 ### Testcontainers
 
@@ -685,47 +1035,90 @@ Os testes de integração utilizam PostgreSQL real em container em vez de depend
 
 ### Scheduler separado da regra financeira
 
-O scheduler é responsável por encontrar operações que precisam ser processadas.
+O scheduler é responsável por localizar os PIX que precisam ser processados.
 
-A regra financeira continua concentrada no serviço PIX, evitando duplicação de lógica.
+A regra financeira permanece concentrada no serviço responsável pelo PIX, evitando duplicação de lógica.
+
+### Configuração externalizada
+
+Configurações específicas de ambiente e informações sensíveis são fornecidas através de variáveis de ambiente.
+
+Isso permite executar o mesmo artefato em diferentes ambientes sem alterar o código da aplicação.
+
+### Imagem Docker versionada
+
+As imagens publicadas no GHCR utilizam o SHA do commit, permitindo rastrear qual código originou cada versão da aplicação.
 
 ---
 
-## 📈 Próximas Evoluções
+## 📈 Evolução do Projeto
 
-O projeto continua em desenvolvimento.
+### ✅ Implementado
 
-Backlog atual:
+- [x] Cadastro de clientes
+- [x] Contas bancárias
+- [x] Autenticação JWT
+- [x] Transferências
+- [x] PIX
+- [x] Chaves PIX
+- [x] Limite diário de PIX
+- [x] Controle de concorrência
+- [x] Lock pessimista
+- [x] Extrato bancário
+- [x] Comprovantes
+- [x] PIX agendado
+- [x] Processamento com Spring Scheduler
+- [x] Testes unitários
+- [x] Testes do processamento agendado
+- [x] Testes de integração
+- [x] Testcontainers
+- [x] JaCoCo
+- [x] Flyway
+- [x] Swagger UI
+- [x] OpenAPI
+- [x] Autenticação JWT integrada ao Swagger
+- [x] Exemplos nos DTOs com `@Schema`
+- [x] Documentação separada com `ControllerDocs`
+- [x] Docker Multi-stage Build
+- [x] Docker Compose
+- [x] Profiles dev, test e prod
+- [x] Pipeline CI
+- [x] Pipeline CD
+- [x] Publicação de imagem no GHCR
+- [x] Deploy em ambiente cloud
 
+### 🔜 Backlog
+
+- [ ] Idempotência nas operações PIX
 - [ ] Cancelamento de PIX agendado
-- [ ] Testes unitários do PIX Scheduler
-- [ ] Testes de integração do agendamento
-- [ ] Idempotência em operações PIX
 - [ ] Auditoria de transações
-- [ ] Filtros avançados no extrato
+- [ ] Spring Boot Actuator
 - [ ] Métricas e observabilidade
 - [ ] Redis
-- [ ] Pipeline CI/CD
-- [ ] Containerização completa da aplicação
-- [ ] Deploy em ambiente cloud
+- [ ] Cache
+- [ ] Rate limiting
+- [ ] Filtros avançados no extrato
 
 ---
 
 ## 🎯 Objetivo
 
-A **Bank API** foi criada para aplicar conceitos utilizados no desenvolvimento de sistemas backend modernos e explorar desafios que vão além de CRUD.
+A **Bank API** foi criada para aplicar conceitos utilizados no desenvolvimento de sistemas backend modernos e explorar desafios que vão além de operações CRUD.
 
 Entre os principais conceitos trabalhados estão:
 
 ```text
 ✓ API REST
 ✓ Arquitetura em camadas
+✓ Java 21
+✓ Spring Boot
 ✓ Segurança com JWT
 ✓ Autorização
 ✓ PostgreSQL
 ✓ JPA / Hibernate
-✓ Migrations
+✓ Flyway
 ✓ MapStruct
+✓ Swagger / OpenAPI
 ✓ Transações financeiras
 ✓ Concorrência
 ✓ Lock pessimista
@@ -734,8 +1127,17 @@ Entre os principais conceitos trabalhados estão:
 ✓ Testes unitários
 ✓ Testes de integração
 ✓ Testcontainers
+✓ JaCoCo
 ✓ Docker
+✓ Docker Compose
+✓ Configuração por ambiente
+✓ GitHub Actions
+✓ CI/CD
+✓ GHCR
+✓ Deploy em cloud
 ```
+
+A proposta é continuar evoluindo o projeto gradualmente, adicionando novos desafios de arquitetura, segurança, performance, observabilidade e confiabilidade.
 
 ---
 
@@ -745,7 +1147,7 @@ Entre os principais conceitos trabalhados estão:
 
 Desenvolvedor Java / Full Stack
 
-Projeto desenvolvido com foco em evolução técnica, boas práticas de engenharia de software e demonstração prática de conhecimentos em desenvolvimento backend.
+Projeto desenvolvido com foco em evolução técnica, boas práticas de engenharia de software e aplicação prática de conceitos utilizados no desenvolvimento backend.
 
 ---
 
