@@ -8,7 +8,9 @@ import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
 import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
 import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
+import com.leonardo.bank_api.pix.entity.PixIdempotency;
 import com.leonardo.bank_api.pix.mapper.PixMapper;
+import com.leonardo.bank_api.pix.repository.PixIdempotencyRepository;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.impl.PixServiceImpl;
 import com.leonardo.bank_api.pix.validation.PixKeyValidator;
@@ -45,6 +47,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 class PixServiceImplTest {
@@ -67,6 +70,9 @@ class PixServiceImplTest {
     @Mock
     private PixKeyValidator pixKeyValidator;
 
+    @Mock
+    private PixIdempotencyRepository pixIdempotencyRepository;
+
     private PixServiceImpl pixService;
 
     @BeforeEach
@@ -78,8 +84,19 @@ class PixServiceImplTest {
                 pixMapper,
                 List.of(pixKeyValidator),
                 transactionRepository,
-                transactionMapper
+                transactionMapper,
+                pixIdempotencyRepository
         );
+
+        PixIdempotency idempotency = mock(PixIdempotency.class);
+
+        lenient()
+                .when(pixIdempotencyRepository.reserve(any(), any()))
+                .thenReturn(1);
+
+        lenient()
+                .when(pixIdempotencyRepository.findByIdempotencyKey(any()))
+                .thenReturn(Optional.of(idempotency));
     }
 
 
@@ -445,7 +462,8 @@ class PixServiceImplTest {
         TransactionResponse result =
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 );
 
         assertThat(result)
@@ -531,7 +549,8 @@ class PixServiceImplTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(BusinessException.class)
@@ -609,7 +628,8 @@ class PixServiceImplTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(ForbiddenOperationException.class)
@@ -682,7 +702,8 @@ class PixServiceImplTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(BusinessException.class)
@@ -753,7 +774,8 @@ class PixServiceImplTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(BusinessException.class)
@@ -782,7 +804,8 @@ class PixServiceImplTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -1233,7 +1256,8 @@ class PixServiceImplTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(BusinessException.class)
@@ -1348,7 +1372,8 @@ class PixServiceImplTest {
         TransactionResponse result =
                 pixService.transfer(
                         sourceAccountId,
-                        request
+                        request,
+                        newIdempotencyKey()
                 );
 
         assertThat(result)
@@ -1619,5 +1644,9 @@ class PixServiceImplTest {
         )
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Conta não encontrada");
+    }
+
+    private String newIdempotencyKey() {
+        return UUID.randomUUID().toString();
     }
 }

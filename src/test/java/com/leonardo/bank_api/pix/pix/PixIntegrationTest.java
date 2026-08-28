@@ -9,11 +9,21 @@ import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
 import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
 import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.entity.PixKey;
+import com.leonardo.bank_api.pix.repository.PixIdempotencyRepository;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.PixService;
 import com.leonardo.bank_api.shared.enums.AccountStatus;
 import com.leonardo.bank_api.shared.enums.PixKeyType;
 import com.leonardo.bank_api.shared.enums.TransactionStatus;
+import com.leonardo.bank_api.shared.enums.TransactionType;
+import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
+import com.leonardo.bank_api.transaction.entity.Transaction;
+import com.leonardo.bank_api.transaction.repository.TransactionRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,26 +34,17 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;import com.leonardo.bank_api.shared.enums.TransactionType;
-import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
-import com.leonardo.bank_api.transaction.entity.Transaction;
-import com.leonardo.bank_api.transaction.repository.TransactionRepository;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-
 
 @SpringBootTest
 @Testcontainers
@@ -54,20 +55,6 @@ class PixIntegrationTest {
     @ServiceConnection
     static PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:17");
-
-    @BeforeEach
-    void cleanDatabase() {
-
-        transactionRepository.deleteAll();
-        pixKeyRepository.deleteAll();
-        accountRepository.deleteAll();
-        customerRepository.deleteAll();
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
-    }
 
     @Autowired
     private PixService pixService;
@@ -81,8 +68,31 @@ class PixIntegrationTest {
     @Autowired
     private PixKeyRepository pixKeyRepository;
 
+    @Autowired
+    private PixIdempotencyRepository pixIdempotencyRepository;
+
     @MockitoSpyBean
     private TransactionRepository transactionRepository;
+
+    @BeforeEach
+    void cleanDatabase() {
+
+        /*
+         * A idempotência possui referência para transaction.
+         * Portanto, deve ser apagada antes das transações.
+         */
+        pixIdempotencyRepository.deleteAll();
+
+        transactionRepository.deleteAll();
+        pixKeyRepository.deleteAll();
+        accountRepository.deleteAll();
+        customerRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void shouldTransferPixAndPersistBalances() {
@@ -148,7 +158,8 @@ class PixIntegrationTest {
         TransactionResponse response =
                 pixService.transfer(
                         sourceAccount.getId(),
-                        request
+                        request,
+                        newIdempotencyKey()
                 );
 
         Account updatedSource =
@@ -242,7 +253,8 @@ class PixIntegrationTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccount.getId(),
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(BusinessException.class)
@@ -334,7 +346,8 @@ class PixIntegrationTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccount.getId(),
-                        request
+                        request,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(RuntimeException.class)
@@ -438,12 +451,18 @@ class PixIntegrationTest {
 
                 start.await();
 
+                /*
+                 * Cada thread representa uma transferência diferente.
+                 * Por isso cada uma precisa possuir sua própria
+                 * Idempotency-Key.
+                 */
                 pixService.transfer(
                         sourceAccount.getId(),
                         new PixTransferRequest(
                                 pixKey.getKeyValue(),
                                 new BigDecimal("80.00")
-                        )
+                        ),
+                        newIdempotencyKey()
                 );
 
                 successfulTransfers.incrementAndGet();
@@ -634,7 +653,8 @@ class PixIntegrationTest {
         assertThatThrownBy(() ->
                 pixService.transfer(
                         sourceAccount.getId(),
-                        transferRequest
+                        transferRequest,
+                        newIdempotencyKey()
                 )
         )
                 .isInstanceOf(BusinessException.class)
@@ -663,5 +683,9 @@ class PixIntegrationTest {
         // 6. Nenhuma transação PIX deve ter sido criada
         assertThat(transactionRepository.count())
                 .isZero();
+    }
+
+    private String newIdempotencyKey() {
+        return UUID.randomUUID().toString();
     }
 }
