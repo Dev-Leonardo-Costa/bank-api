@@ -6,6 +6,7 @@ import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
 import com.leonardo.bank_api.pix.dto.response.PixKeyResponse;
 import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
+import com.leonardo.bank_api.pix.dto.response.PixScheduleResponse;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

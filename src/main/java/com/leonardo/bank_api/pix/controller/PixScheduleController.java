@@ -32,4 +32,12 @@ public class PixScheduleController implements PixScheduleControllerDocs {
         return ResponseEntity.ok(pixScheduleService.findMySchedules());
     }
 
+    @PatchMapping("/{scheduleId}/cancel")
+    public ResponseEntity<PixScheduleResponse> cancelSchedule(@PathVariable Long scheduleId) {
+
+        PixScheduleResponse response = pixScheduleService.cancelSchedule(scheduleId);
+
+        return ResponseEntity.ok(response);
+    }
+
 }

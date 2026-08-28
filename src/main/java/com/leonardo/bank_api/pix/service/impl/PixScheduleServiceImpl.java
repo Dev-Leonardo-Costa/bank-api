@@ -2,6 +2,7 @@ package com.leonardo.bank_api.pix.service.impl;
 
 import com.leonardo.bank_api.account.entity.Account;
 import com.leonardo.bank_api.account.repository.AccountRepository;
+import com.leonardo.bank_api.common.exception.BusinessException;
 import com.leonardo.bank_api.common.exception.ForbiddenOperationException;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.pix.dto.request.CreatePixScheduleRequest;
@@ -82,5 +83,43 @@ public class PixScheduleServiceImpl implements PixScheduleService {
                 .stream()
                 .map(pixScheduleMapper::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    @Override
+    public PixScheduleResponse cancelSchedule(Long scheduleId) {
+        String email = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        PixSchedule schedule = pixScheduleRepository
+                .findById(scheduleId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Agendamento PIX não encontrado"
+                        )
+                );
+
+        if (!schedule.getSourceAccount()
+                .getCustomer()
+                .getEmail()
+                .equalsIgnoreCase(email)) {
+
+            throw new ForbiddenOperationException(
+                    "Você não possui permissão para cancelar este PIX agendado"
+            );
+        }
+
+        if (schedule.getStatus() != PixScheduleStatus.SCHEDULED) {
+            throw new BusinessException(
+                    "Somente PIX com status SCHEDULED pode ser cancelado"
+            );
+        }
+
+        schedule.setStatus(PixScheduleStatus.CANCELED);
+
+        PixSchedule saved = pixScheduleRepository.save(schedule);
+
+        return pixScheduleMapper.toResponse(saved);
     }
 }

@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
@@ -78,4 +79,29 @@ public interface PixScheduleControllerDocs {
             )
     })
     ResponseEntity<List<PixScheduleResponse>> findMySchedules();
+
+    @Operation(
+            summary = "Cancelar agendamento PIX",
+            description = """
+                Cancela um agendamento PIX.
+
+                Somente o proprietário da conta de origem do agendamento
+                pode cancelar o agendamento.
+                """
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Agendamento cancelado com sucesso"
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Usuário não possui permissão para cancelar o agendamento"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Agendamento não encontrado"
+            )
+    })
+    ResponseEntity<PixScheduleResponse> cancelSchedule(@PathVariable Long scheduleId);
 }

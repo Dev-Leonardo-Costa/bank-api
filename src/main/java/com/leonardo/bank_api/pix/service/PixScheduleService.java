@@ -11,4 +11,6 @@ public interface PixScheduleService {
 
     List<PixScheduleResponse> findMySchedules();
 
+    PixScheduleResponse cancelSchedule(Long scheduleId);
+
 }
