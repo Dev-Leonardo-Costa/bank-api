@@ -11,8 +11,10 @@ import com.leonardo.bank_api.pix.dto.request.UpdatePixLimitRequest;
 import com.leonardo.bank_api.pix.dto.response.PixKeyResponse;
 import com.leonardo.bank_api.pix.dto.response.PixLimitResponse;
 import com.leonardo.bank_api.pix.dto.response.PixRecipientResponse;
+import com.leonardo.bank_api.pix.entity.PixIdempotency;
 import com.leonardo.bank_api.pix.entity.PixKey;
 import com.leonardo.bank_api.pix.mapper.PixMapper;
+import com.leonardo.bank_api.pix.repository.PixIdempotencyRepository;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.PixService;
 import com.leonardo.bank_api.pix.validation.PixKeyValidator;
@@ -44,6 +46,7 @@ public class PixServiceImpl implements PixService {
     private final List<PixKeyValidator> validators;
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
+    private final PixIdempotencyRepository pixIdempotencyRepository;
 
     @Transactional
     @Override
@@ -84,13 +87,50 @@ public class PixServiceImpl implements PixService {
 
     @Transactional
     @Override
-    public TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request) {
+    public TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request, String idempotencyKey) {
+
+        validateIdempotencyKey(idempotencyKey);
+
+        int reserved = pixIdempotencyRepository.reserve(idempotencyKey);
+
+        if (reserved == 0) {
+
+            PixIdempotency existing = pixIdempotencyRepository
+                    .findByIdempotencyKey(idempotencyKey)
+                    .orElseThrow(() ->
+                            new BusinessException(
+                                    "Não foi possível recuperar a operação idempotente"
+                            )
+                    );
+
+            if (existing.getTransaction() == null) {
+                throw new BusinessException(
+                        "Operação idempotente ainda não possui transação associada"
+                );
+            }
+
+            return transactionMapper.toResponse(existing.getTransaction());
+        }
 
         PixTransferContext context = preparePixTransfer(sourceAccountId, request.pixKey());
 
         validateOwnership(context.sourceAccount());
 
-        return executePixTransfer(context, request.amount());
+        Transaction transaction = executePixTransferEntity(context, request.amount());
+
+        PixIdempotency idempotency = pixIdempotencyRepository
+                .findByIdempotencyKey(idempotencyKey)
+                .orElseThrow(() ->
+                        new BusinessException(
+                                "Registro de idempotência não encontrado"
+                        )
+                );
+
+        idempotency.setTransaction(transaction);
+
+        pixIdempotencyRepository.save(idempotency);
+
+        return transactionMapper.toResponse(transaction);
     }
 
     @Transactional(readOnly = true)
@@ -247,13 +287,11 @@ public class PixServiceImpl implements PixService {
     @Transactional
     @Override
     public TransactionResponse executeScheduledPix(Long sourceAccountId, String pixKey, BigDecimal amount) {
-        PixTransferContext context =
-                preparePixTransfer(
-                        sourceAccountId,
-                        pixKey
-                );
+        PixTransferContext context = preparePixTransfer(sourceAccountId, pixKey);
 
-        return executePixTransfer(context, amount);
+        Transaction transaction = executePixTransferEntity(context, amount);
+
+        return transactionMapper.toResponse(transaction);
     }
 
     private PixKeyValidator getValidator(PixKeyType type) {
@@ -527,5 +565,57 @@ public class PixServiceImpl implements PixService {
 
         return transactionMapper
                 .toResponse(savedTransaction);
+    }
+
+    private void validateIdempotencyKey(String idempotencyKey) {
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException("Idempotency-Key é obrigatório");
+        }
+
+        if (idempotencyKey.length() > 100) {
+            throw new BusinessException("Idempotency-Key deve possuir no máximo 100 caracteres");
+        }
+    }
+
+    private Transaction executePixTransferEntity(PixTransferContext context, BigDecimal amount) {
+
+        Account sourceAccount = context.sourceAccount();
+
+        Account destinationAccount = context.destinationAccount();
+
+        if (sourceAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new BusinessException("A conta de origem não está ativa");
+        }
+
+        if (destinationAccount.getStatus() != AccountStatus.ACTIVE) {
+            throw new BusinessException(
+                    "A conta de destino não está ativa"
+            );
+        }
+
+        if (sourceAccount.getBalance().compareTo(amount) < 0) {
+            throw new BusinessException("Saldo insuficiente");
+        }
+
+        validateDailyPixLimit(sourceAccount, amount);
+
+        sourceAccount.setBalance(sourceAccount.getBalance().subtract(amount));
+
+        destinationAccount.setBalance(destinationAccount.getBalance().add(amount));
+
+        accountRepository.save(sourceAccount);
+        accountRepository.save(destinationAccount);
+
+        Transaction transaction =
+                Transaction.builder()
+                        .type(TransactionType.PIX)
+                        .status(TransactionStatus.COMPLETED)
+                        .amount(amount)
+                        .sourceAccount(sourceAccount)
+                        .destinationAccount(destinationAccount)
+                        .build();
+
+        return transactionRepository.save(transaction);
     }
 }

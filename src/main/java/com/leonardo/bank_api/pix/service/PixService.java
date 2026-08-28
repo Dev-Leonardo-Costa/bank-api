@@ -15,7 +15,7 @@ public interface PixService {
 
     PixKeyResponse createPixKey(CreatePixKeyRequest request);
 
-    TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request);
+    TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request, String idempotencyKey);
 
     List<PixKeyResponse> findMyPixKeys();
 

@@ -66,18 +66,8 @@ public interface PixControllerDocs {
             description = """
                 Realiza uma transferência PIX utilizando uma chave de destino.
 
-                Durante a operação são realizadas validações de:
-
-                - propriedade da conta de origem;
-                - existência da chave PIX;
-                - conta de origem ativa;
-                - conta de destino ativa;
-                - saldo disponível;
-                - limite diário de PIX;
-                - tentativa de transferência para a própria conta.
-
-                As contas envolvidas são bloqueadas durante a operação
-                para reduzir inconsistências causadas por concorrência.
+                O header Idempotency-Key impede que a mesma operação
+                seja processada mais de uma vez.
                 """
     )
     @ApiResponses({
@@ -99,8 +89,9 @@ public interface PixControllerDocs {
             )
     })
     ResponseEntity<TransactionResponse> transfer(
-            @PathVariable Long sourceAccountId,
-            @Valid @RequestBody PixTransferRequest request
+            String idempotencyKey,
+            Long sourceAccountId,
+            PixTransferRequest request
     );
 
     @Operation(

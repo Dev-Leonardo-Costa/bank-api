@@ -40,13 +40,11 @@ public class PixController implements PixControllerDocs {
 
     @PostMapping("/accounts/{sourceAccountId}/transfer")
     public ResponseEntity<TransactionResponse> transfer(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @PathVariable Long sourceAccountId,
             @Valid @RequestBody PixTransferRequest request
     ) {
-
-        return ResponseEntity.ok(
-                pixService.transfer(sourceAccountId, request)
-        );
+        return ResponseEntity.ok(pixService.transfer(sourceAccountId, request, idempotencyKey));
     }
 
     @GetMapping("/keys")
