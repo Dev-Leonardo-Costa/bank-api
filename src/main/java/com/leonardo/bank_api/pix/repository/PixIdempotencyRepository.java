@@ -15,18 +15,24 @@ public interface PixIdempotencyRepository extends JpaRepository<PixIdempotency, 
     @Modifying
     @Query(
             value = """
-                    INSERT INTO pix_idempotency (
-                        idempotency_key,
-                        created_at
-                    )
-                    VALUES (
-                        :idempotencyKey,
-                        CURRENT_TIMESTAMP
-                    )
-                    ON CONFLICT (idempotency_key)
-                    DO NOTHING
-                    """,
+                INSERT INTO pix_idempotency (
+                    idempotency_key,
+                    request_hash,
+                    created_at
+                )
+                VALUES (
+                    :idempotencyKey,
+                    :requestHash,
+                    CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (idempotency_key)
+                DO NOTHING
+                """,
             nativeQuery = true
     )
-    int reserve(@Param("idempotencyKey") String idempotencyKey);
+    int reserve(
+            @Param("idempotencyKey") String idempotencyKey,
+            @Param("requestHash") String requestHash
+    );
+
 }

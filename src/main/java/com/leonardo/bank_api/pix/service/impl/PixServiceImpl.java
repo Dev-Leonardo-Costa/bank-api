@@ -4,6 +4,7 @@ import com.leonardo.bank_api.account.entity.Account;
 import com.leonardo.bank_api.account.repository.AccountRepository;
 import com.leonardo.bank_api.common.exception.BusinessException;
 import com.leonardo.bank_api.common.exception.ForbiddenOperationException;
+import com.leonardo.bank_api.common.exception.IdempotencyConflictException;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.pix.dto.request.CreatePixKeyRequest;
 import com.leonardo.bank_api.pix.dto.request.PixTransferRequest;
@@ -32,8 +33,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 
 @Service
@@ -91,24 +96,27 @@ public class PixServiceImpl implements PixService {
 
         validateIdempotencyKey(idempotencyKey);
 
-        int reserved = pixIdempotencyRepository.reserve(idempotencyKey);
+        String requestHash = generateRequestHash(sourceAccountId, request);
+
+        int reserved = pixIdempotencyRepository.reserve(idempotencyKey, requestHash);
 
         if (reserved == 0) {
+            PixIdempotency existing =
+                    pixIdempotencyRepository
+                            .findByIdempotencyKey(idempotencyKey)
+                            .orElseThrow(() ->
+                                    new BusinessException(
+                                            "Não foi possível recuperar a operação idempotente"
+                                    )
+                            );
 
-            PixIdempotency existing = pixIdempotencyRepository
-                    .findByIdempotencyKey(idempotencyKey)
-                    .orElseThrow(() ->
-                            new BusinessException(
-                                    "Não foi possível recuperar a operação idempotente"
-                            )
-                    );
-
-            if (existing.getTransaction() == null) {
-                throw new BusinessException(
-                        "Operação idempotente ainda não possui transação associada"
-                );
+            if (!requestHash.equals(existing.getRequestHash())) {
+                throw new IdempotencyConflictException("Idempotency-Key já utilizada com dados diferentes");
             }
 
+            if (existing.getTransaction() == null) {
+                throw new BusinessException("Operação idempotente ainda não possui transação associada");
+            }
             return transactionMapper.toResponse(existing.getTransaction());
         }
 
@@ -617,5 +625,33 @@ public class PixServiceImpl implements PixService {
                         .build();
 
         return transactionRepository.save(transaction);
+    }
+
+    private String generateRequestHash(Long sourceAccountId, PixTransferRequest request) {
+
+        String rawData =
+                sourceAccountId
+                        + "|"
+                        + request.pixKey()
+                        + "|"
+                        + request.amount().stripTrailingZeros().toPlainString();
+
+        try {
+
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            byte[] hash =
+                    digest.digest(
+                            rawData.getBytes(StandardCharsets.UTF_8)
+                    );
+
+            return HexFormat.of().formatHex(hash);
+
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(
+                    "Erro ao gerar hash da requisição PIX",
+                    ex
+            );
+        }
     }
 }

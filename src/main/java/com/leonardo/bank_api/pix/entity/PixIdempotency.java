@@ -32,6 +32,9 @@ public class PixIdempotency {
     @Column(name = "idempotency_key", nullable = false, length = 100)
     private String idempotencyKey;
 
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "transaction_id")
     private Transaction transaction;
