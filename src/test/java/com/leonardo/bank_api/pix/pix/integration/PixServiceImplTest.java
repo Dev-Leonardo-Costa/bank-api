@@ -21,9 +21,13 @@ import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
+import com.leonardo.bank_api.transaction.service.TransactionAuditService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.leonardo.bank_api.account.entity.Account;
@@ -73,22 +77,24 @@ class PixServiceImplTest {
     @Mock
     private PixIdempotencyRepository pixIdempotencyRepository;
 
+    @Mock
+    private TransactionAuditService transactionAuditService;
+
+    @Spy
+    private List<PixKeyValidator> validators =
+            new java.util.ArrayList<>();
+
+    @InjectMocks
     private PixServiceImpl pixService;
 
     @BeforeEach
     void setUp() {
 
-        pixService = new PixServiceImpl(
-                pixKeyRepository,
-                accountRepository,
-                pixMapper,
-                List.of(pixKeyValidator),
-                transactionRepository,
-                transactionMapper,
-                pixIdempotencyRepository
-        );
+        validators.clear();
+        validators.add(pixKeyValidator);
 
-        PixIdempotency idempotency = mock(PixIdempotency.class);
+        PixIdempotency idempotency =
+                mock(PixIdempotency.class);
 
         lenient()
                 .when(pixIdempotencyRepository.reserve(any(), any()))
@@ -97,6 +103,11 @@ class PixServiceImplTest {
         lenient()
                 .when(pixIdempotencyRepository.findByIdempotencyKey(any()))
                 .thenReturn(Optional.of(idempotency));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
 
@@ -789,13 +800,21 @@ class PixServiceImplTest {
     void shouldThrowExceptionWhenPixKeyIsNotFound() {
 
         Long sourceAccountId = 1L;
-
+        String email = "cliente@email.com";
         String pixKeyValue = "naoexiste@email.com";
 
         PixTransferRequest request =
                 new PixTransferRequest(
                         pixKeyValue,
                         new BigDecimal("100.00")
+                );
+
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(
+                                email,
+                                null
+                        )
                 );
 
         when(pixKeyRepository.findByKeyValue(pixKeyValue))
@@ -1373,7 +1392,7 @@ class PixServiceImplTest {
                 pixService.transfer(
                         sourceAccountId,
                         request,
-                        newIdempotencyKey()
+                        pixKeyValue
                 );
 
         assertThat(result)

@@ -32,6 +32,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -71,22 +72,29 @@ class PixIntegrationTest {
     @Autowired
     private PixIdempotencyRepository pixIdempotencyRepository;
 
+    @Autowired
+    private TransactionRepository transactionAuditRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @MockitoSpyBean
     private TransactionRepository transactionRepository;
 
     @BeforeEach
     void cleanDatabase() {
 
-        /*
-         * A idempotência possui referência para transaction.
-         * Portanto, deve ser apagada antes das transações.
-         */
-        pixIdempotencyRepository.deleteAll();
-
-        transactionRepository.deleteAll();
-        pixKeyRepository.deleteAll();
-        accountRepository.deleteAll();
-        customerRepository.deleteAll();
+        jdbcTemplate.execute("""
+            TRUNCATE TABLE
+                transaction_audit,
+                pix_idempotency,
+                pix_schedules,
+                transactions,
+                pix_keys,
+                accounts,
+                customers
+            RESTART IDENTITY CASCADE
+            """);
     }
 
     @AfterEach

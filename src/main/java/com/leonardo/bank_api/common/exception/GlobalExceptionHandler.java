@@ -118,8 +118,8 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 LocalDateTime.now(),
                 HttpStatus.CONFLICT.value(),
-                ex.getMessage(),
                 HttpStatus.CONFLICT.getReasonPhrase(),
+                ex.getMessage(),
                 request.getRequestURI(),
                 List.of()
         );

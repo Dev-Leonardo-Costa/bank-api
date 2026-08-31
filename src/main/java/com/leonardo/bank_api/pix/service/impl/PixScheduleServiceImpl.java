@@ -14,6 +14,9 @@ import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.repository.PixScheduleRepository;
 import com.leonardo.bank_api.pix.service.PixScheduleService;
 import com.leonardo.bank_api.shared.enums.PixScheduleStatus;
+import com.leonardo.bank_api.shared.enums.TransactionAuditAction;
+import com.leonardo.bank_api.shared.enums.TransactionAuditStatus;
+import com.leonardo.bank_api.transaction.service.TransactionAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,7 @@ public class PixScheduleServiceImpl implements PixScheduleService {
     private final PixKeyRepository pixKeyRepository;
     private final AccountRepository accountRepository;
     private final PixScheduleMapper pixScheduleMapper;
+    private final TransactionAuditService transactionAuditService;
 
     @Transactional
     @Override
@@ -63,9 +67,26 @@ public class PixScheduleServiceImpl implements PixScheduleService {
                         )
                 );
 
-        PixSchedule schedule = pixScheduleMapper.toEntity(request, sourceAccount, destinationPixKey);
+        PixSchedule schedule =
+                pixScheduleMapper.toEntity(
+                        request,
+                        sourceAccount,
+                        destinationPixKey
+                );
+
+        schedule.setStatus(PixScheduleStatus.SCHEDULED);
 
         PixSchedule saved = pixScheduleRepository.save(schedule);
+
+        transactionAuditService.register(
+                null,
+                TransactionAuditAction.PIX_SCHEDULE_CREATED,
+                TransactionAuditStatus.SUCCESS,
+                email,
+                "Agendamento PIX "
+                        + saved.getId()
+                        + " criado pelo usuário"
+        );
 
         return pixScheduleMapper.toResponse(saved);
     }
@@ -117,6 +138,16 @@ public class PixScheduleServiceImpl implements PixScheduleService {
         }
 
         schedule.setStatus(PixScheduleStatus.CANCELED);
+
+        transactionAuditService.register(
+                null,
+                TransactionAuditAction.PIX_SCHEDULE_CANCELED,
+                TransactionAuditStatus.SUCCESS,
+                email,
+                "Agendamento PIX "
+                        + scheduleId
+                        + " cancelado pelo usuário"
+        );
 
         PixSchedule saved = pixScheduleRepository.save(schedule);
 

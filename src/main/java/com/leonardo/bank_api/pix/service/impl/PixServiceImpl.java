@@ -19,15 +19,14 @@ import com.leonardo.bank_api.pix.repository.PixIdempotencyRepository;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.PixService;
 import com.leonardo.bank_api.pix.validation.PixKeyValidator;
-import com.leonardo.bank_api.shared.enums.AccountStatus;
-import com.leonardo.bank_api.shared.enums.PixKeyType;
-import com.leonardo.bank_api.shared.enums.TransactionStatus;
-import com.leonardo.bank_api.shared.enums.TransactionType;
+import com.leonardo.bank_api.shared.enums.*;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
 import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
+import com.leonardo.bank_api.transaction.service.TransactionAuditService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +51,8 @@ public class PixServiceImpl implements PixService {
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
     private final PixIdempotencyRepository pixIdempotencyRepository;
+    private final TransactionAuditService transactionAuditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     @Override
@@ -94,51 +95,107 @@ public class PixServiceImpl implements PixService {
     @Override
     public TransactionResponse transfer(Long sourceAccountId, PixTransferRequest request, String idempotencyKey) {
 
-        validateIdempotencyKey(idempotencyKey);
+        String email = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
 
-        String requestHash = generateRequestHash(sourceAccountId, request);
+        try {
 
-        int reserved = pixIdempotencyRepository.reserve(idempotencyKey, requestHash);
+            validateIdempotencyKey(idempotencyKey);
 
-        if (reserved == 0) {
-            PixIdempotency existing =
+            String requestHash = generateRequestHash(
+                    sourceAccountId,
+                    request
+            );
+
+            int reserved = pixIdempotencyRepository.reserve(
+                    idempotencyKey,
+                    requestHash
+            );
+
+            if (reserved == 0) {
+
+                PixIdempotency existing =
+                        pixIdempotencyRepository
+                                .findByIdempotencyKey(idempotencyKey)
+                                .orElseThrow(() ->
+                                        new BusinessException(
+                                                "Não foi possível recuperar a operação idempotente"
+                                        )
+                                );
+
+                if (!requestHash.equals(existing.getRequestHash())) {
+                    throw new IdempotencyConflictException(
+                            "Idempotency-Key já utilizada com dados diferentes"
+                    );
+                }
+
+                if (existing.getTransaction() == null) {
+                    throw new BusinessException(
+                            "Operação idempotente ainda não possui transação associada"
+                    );
+                }
+
+                return transactionMapper.toResponse(
+                        existing.getTransaction()
+                );
+            }
+
+            PixTransferContext context =
+                    preparePixTransfer(
+                            sourceAccountId,
+                            request.pixKey()
+                    );
+
+            validateOwnership(context.sourceAccount());
+
+            Transaction transaction = executePixTransferEntity(context, request.amount());
+
+            PixIdempotency idempotency =
                     pixIdempotencyRepository
                             .findByIdempotencyKey(idempotencyKey)
                             .orElseThrow(() ->
                                     new BusinessException(
-                                            "Não foi possível recuperar a operação idempotente"
+                                            "Registro de idempotência não encontrado"
                                     )
                             );
 
-            if (!requestHash.equals(existing.getRequestHash())) {
-                throw new IdempotencyConflictException("Idempotency-Key já utilizada com dados diferentes");
-            }
+            idempotency.setTransaction(transaction);
 
-            if (existing.getTransaction() == null) {
-                throw new BusinessException("Operação idempotente ainda não possui transação associada");
-            }
-            return transactionMapper.toResponse(existing.getTransaction());
+            pixIdempotencyRepository.save(idempotency);
+
+            transactionAuditService.register(
+                    transaction,
+                    TransactionAuditAction.PIX_COMPLETED,
+                    TransactionAuditStatus.SUCCESS,
+                    email,
+                    "PIX realizado com sucesso"
+            );
+
+            return transactionMapper.toResponse(transaction);
+
+        } catch (IdempotencyConflictException ex) {
+
+            transactionAuditService.registerFailure(
+                    TransactionAuditAction.PIX_FAILED,
+                    TransactionAuditStatus.FAILED,
+                    email,
+                    "Falha ao realizar PIX: " + ex.getMessage()
+            );
+
+            throw ex;
+
+        } catch (RuntimeException ex) {
+
+            transactionAuditService.registerFailure(
+                    TransactionAuditAction.PIX_FAILED,
+                    TransactionAuditStatus.FAILED,
+                    email,
+                    "Falha ao realizar PIX: " + ex.getMessage()
+            );
+
+            throw ex;
         }
-
-        PixTransferContext context = preparePixTransfer(sourceAccountId, request.pixKey());
-
-        validateOwnership(context.sourceAccount());
-
-        Transaction transaction = executePixTransferEntity(context, request.amount());
-
-        PixIdempotency idempotency = pixIdempotencyRepository
-                .findByIdempotencyKey(idempotencyKey)
-                .orElseThrow(() ->
-                        new BusinessException(
-                                "Registro de idempotência não encontrado"
-                        )
-                );
-
-        idempotency.setTransaction(transaction);
-
-        pixIdempotencyRepository.save(idempotency);
-
-        return transactionMapper.toResponse(transaction);
     }
 
     @Transactional(readOnly = true)
@@ -568,11 +625,19 @@ public class PixServiceImpl implements PixService {
                         .destinationAccount(destinationAccount)
                         .build();
 
-        Transaction savedTransaction =
-                transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
 
-        return transactionMapper
-                .toResponse(savedTransaction);
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        transactionAuditService.register(
+                savedTransaction,
+                TransactionAuditAction.PIX_COMPLETED,
+                TransactionAuditStatus.SUCCESS,
+                email,
+                "PIX realizada com sucesso"
+        );
+
+        return transactionMapper.toResponse(savedTransaction);
     }
 
     private void validateIdempotencyKey(String idempotencyKey) {
