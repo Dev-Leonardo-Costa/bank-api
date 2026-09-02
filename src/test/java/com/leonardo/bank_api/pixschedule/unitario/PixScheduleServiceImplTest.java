@@ -13,6 +13,7 @@ import com.leonardo.bank_api.pix.mapper.PixScheduleMapper;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.repository.PixScheduleRepository;
 import com.leonardo.bank_api.pix.service.impl.PixScheduleServiceImpl;
+import com.leonardo.bank_api.pix.service.metrics.PixMetricsService;
 import com.leonardo.bank_api.shared.enums.PixScheduleStatus;
 import com.leonardo.bank_api.transaction.service.TransactionAuditService;
 import org.junit.jupiter.api.AfterEach;
@@ -52,6 +53,9 @@ class PixScheduleServiceImplTest {
 
     @Mock
     private TransactionAuditService transactionAuditService;
+
+    @Mock
+    private PixMetricsService pixMetricsService;
 
     @InjectMocks
     private PixScheduleServiceImpl pixScheduleService;

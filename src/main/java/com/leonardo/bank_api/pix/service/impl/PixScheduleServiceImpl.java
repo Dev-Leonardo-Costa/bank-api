@@ -13,10 +13,12 @@ import com.leonardo.bank_api.pix.mapper.PixScheduleMapper;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.repository.PixScheduleRepository;
 import com.leonardo.bank_api.pix.service.PixScheduleService;
+import com.leonardo.bank_api.pix.service.metrics.PixMetricsService;
 import com.leonardo.bank_api.shared.enums.PixScheduleStatus;
 import com.leonardo.bank_api.shared.enums.TransactionAuditAction;
 import com.leonardo.bank_api.shared.enums.TransactionAuditStatus;
 import com.leonardo.bank_api.transaction.service.TransactionAuditService;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,8 @@ public class PixScheduleServiceImpl implements PixScheduleService {
     private final AccountRepository accountRepository;
     private final PixScheduleMapper pixScheduleMapper;
     private final TransactionAuditService transactionAuditService;
+
+    private final PixMetricsService pixMetricsService;
 
     @Transactional
     @Override
@@ -87,6 +91,8 @@ public class PixScheduleServiceImpl implements PixScheduleService {
                         + saved.getId()
                         + " criado pelo usuário"
         );
+
+        pixMetricsService.incrementPixScheduled();
 
         return pixScheduleMapper.toResponse(saved);
     }
@@ -150,6 +156,8 @@ public class PixScheduleServiceImpl implements PixScheduleService {
         );
 
         PixSchedule saved = pixScheduleRepository.save(schedule);
+
+        pixMetricsService.incrementPixCanceled();
 
         return pixScheduleMapper.toResponse(saved);
     }

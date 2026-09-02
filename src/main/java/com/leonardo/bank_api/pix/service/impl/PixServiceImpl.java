@@ -18,6 +18,7 @@ import com.leonardo.bank_api.pix.mapper.PixMapper;
 import com.leonardo.bank_api.pix.repository.PixIdempotencyRepository;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.PixService;
+import com.leonardo.bank_api.pix.service.metrics.PixMetricsService;
 import com.leonardo.bank_api.pix.validation.PixKeyValidator;
 import com.leonardo.bank_api.shared.enums.*;
 import com.leonardo.bank_api.transaction.dto.response.TransactionResponse;
@@ -25,6 +26,7 @@ import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
 import com.leonardo.bank_api.transaction.service.TransactionAuditService;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -52,7 +54,9 @@ public class PixServiceImpl implements PixService {
     private final TransactionMapper transactionMapper;
     private final PixIdempotencyRepository pixIdempotencyRepository;
     private final TransactionAuditService transactionAuditService;
-    private final ApplicationEventPublisher eventPublisher;
+
+    private final PixMetricsService pixMetricsService;
+
 
     @Transactional
     @Override
@@ -172,6 +176,8 @@ public class PixServiceImpl implements PixService {
                     "PIX realizado com sucesso"
             );
 
+            pixMetricsService.incrementPixSuccess();
+
             return transactionMapper.toResponse(transaction);
 
         } catch (IdempotencyConflictException ex) {
@@ -183,6 +189,8 @@ public class PixServiceImpl implements PixService {
                     "Falha ao realizar PIX: " + ex.getMessage()
             );
 
+            pixMetricsService.incrementPixFailed();
+
             throw ex;
 
         } catch (RuntimeException ex) {
@@ -193,6 +201,8 @@ public class PixServiceImpl implements PixService {
                     email,
                     "Falha ao realizar PIX: " + ex.getMessage()
             );
+
+            pixMetricsService.incrementPixFailed();
 
             throw ex;
         }

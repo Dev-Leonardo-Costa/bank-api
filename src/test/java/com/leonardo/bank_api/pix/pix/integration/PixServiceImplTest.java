@@ -13,6 +13,7 @@ import com.leonardo.bank_api.pix.mapper.PixMapper;
 import com.leonardo.bank_api.pix.repository.PixIdempotencyRepository;
 import com.leonardo.bank_api.pix.repository.PixKeyRepository;
 import com.leonardo.bank_api.pix.service.impl.PixServiceImpl;
+import com.leonardo.bank_api.pix.service.metrics.PixMetricsService;
 import com.leonardo.bank_api.pix.validation.PixKeyValidator;
 import com.leonardo.bank_api.shared.enums.AccountStatus;
 import com.leonardo.bank_api.shared.enums.TransactionStatus;
@@ -76,6 +77,9 @@ class PixServiceImplTest {
 
     @Mock
     private PixIdempotencyRepository pixIdempotencyRepository;
+
+    @Mock
+    private PixMetricsService pixMetricsService;
 
     @Mock
     private TransactionAuditService transactionAuditService;
