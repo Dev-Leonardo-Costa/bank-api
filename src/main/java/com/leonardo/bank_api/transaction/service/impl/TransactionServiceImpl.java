@@ -16,6 +16,7 @@ import com.leonardo.bank_api.transaction.entity.Transaction;
 import com.leonardo.bank_api.transaction.mapper.TransactionMapper;
 import com.leonardo.bank_api.transaction.repository.TransactionRepository;
 import com.leonardo.bank_api.transaction.service.TransactionService;
+import com.leonardo.bank_api.transaction.service.metrics.TransferMetricsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +35,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
+    private final TransferMetricsService transferMetricsService;
 
     @Transactional
     @Override
@@ -63,124 +65,138 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction savedTransaction =
                 transactionRepository.save(transaction);
 
+        transferMetricsService.incrementTransferSuccess();
+
         return transactionMapper.toResponse(savedTransaction);
     }
 
     @Transactional
     @Override
-    public TransactionResponse transfer(
-            Long sourceAccountId,
-            TransferRequest request
-    ) {
+    public TransactionResponse transfer(Long sourceAccountId, TransferRequest request) {
 
-        Long destinationAccountId = request.destinationAccountId();
+        try {
 
-        if (sourceAccountId.equals(destinationAccountId)) {
-            throw new BusinessException(
-                    "A conta de origem e destino não podem ser iguais"
-            );
-        }
+            Long destinationAccountId = request.destinationAccountId();
 
-        Long firstId = Math.min(sourceAccountId, destinationAccountId);
-        Long secondId = Math.max(sourceAccountId, destinationAccountId);
-
-        Account firstAccount = accountRepository.findByIdForUpdate(firstId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Conta não encontrada")
+            if (sourceAccountId.equals(destinationAccountId)) {
+                throw new BusinessException(
+                        "A conta de origem e destino não podem ser iguais"
                 );
+            }
 
-        Account secondAccount = accountRepository.findByIdForUpdate(secondId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Conta não encontrada")
+            Long firstId = Math.min(sourceAccountId, destinationAccountId);
+            Long secondId = Math.max(sourceAccountId, destinationAccountId);
+
+            Account firstAccount = accountRepository.findByIdForUpdate(firstId)
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException("Conta não encontrada")
+                    );
+
+            Account secondAccount = accountRepository.findByIdForUpdate(secondId)
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException("Conta não encontrada")
+                    );
+
+            Account sourceAccount =
+                    firstAccount.getId().equals(sourceAccountId)
+                            ? firstAccount
+                            : secondAccount;
+
+            Account destinationAccount =
+                    firstAccount.getId().equals(destinationAccountId)
+                            ? firstAccount
+                            : secondAccount;
+
+            validateOwnership(sourceAccount);
+
+            if (sourceAccount.getStatus() != AccountStatus.ACTIVE) {
+                throw new BusinessException(
+                        "A conta de origem não está ativa"
                 );
+            }
 
-        Account sourceAccount =
-                firstAccount.getId().equals(sourceAccountId)
-                        ? firstAccount
-                        : secondAccount;
+            if (destinationAccount.getStatus() != AccountStatus.ACTIVE) {
+                throw new BusinessException(
+                        "A conta de destino não está ativa"
+                );
+            }
 
-        Account destinationAccount =
-                firstAccount.getId().equals(destinationAccountId)
-                        ? firstAccount
-                        : secondAccount;
+            if (sourceAccount.getBalance().compareTo(request.amount()) < 0) {
+                throw new BusinessException("Saldo insuficiente");
+            }
 
-        validateOwnership(sourceAccount);
-
-        if (sourceAccount.getStatus() != AccountStatus.ACTIVE) {
-            throw new BusinessException(
-                    "A conta de origem não está ativa"
+            sourceAccount.setBalance(
+                    sourceAccount.getBalance().subtract(request.amount())
             );
-        }
 
-        if (destinationAccount.getStatus() != AccountStatus.ACTIVE) {
-            throw new BusinessException(
-                    "A conta de destino não está ativa"
+            destinationAccount.setBalance(
+                    destinationAccount.getBalance().add(request.amount())
             );
+
+            accountRepository.save(sourceAccount);
+            accountRepository.save(destinationAccount);
+
+            Transaction transaction = Transaction.builder()
+                    .type(TransactionType.TRANSFER)
+                    .status(TransactionStatus.COMPLETED)
+                    .amount(request.amount())
+                    .sourceAccount(sourceAccount)
+                    .destinationAccount(destinationAccount)
+                    .build();
+
+            Transaction savedTransaction =
+                    transactionRepository.save(transaction);
+
+            transferMetricsService.incrementTransferSuccess();
+
+            return transactionMapper.toResponse(savedTransaction);
+        } catch (Exception e) {
+            transferMetricsService.incrementTransferFailed();
+            throw e;
         }
-
-        if (sourceAccount.getBalance().compareTo(request.amount()) < 0) {
-            throw new BusinessException("Saldo insuficiente");
-        }
-
-        sourceAccount.setBalance(
-                sourceAccount.getBalance().subtract(request.amount())
-        );
-
-        destinationAccount.setBalance(
-                destinationAccount.getBalance().add(request.amount())
-        );
-
-        accountRepository.save(sourceAccount);
-        accountRepository.save(destinationAccount);
-
-        Transaction transaction = Transaction.builder()
-                .type(TransactionType.TRANSFER)
-                .status(TransactionStatus.COMPLETED)
-                .amount(request.amount())
-                .sourceAccount(sourceAccount)
-                .destinationAccount(destinationAccount)
-                .build();
-
-        Transaction savedTransaction =
-                transactionRepository.save(transaction);
-
-        return transactionMapper.toResponse(savedTransaction);
     }
 
     @Transactional
     @Override
     public TransactionResponse withdraw(Long accountId, WithdrawRequest request) {
-        Account account = getOwnedAccount(accountId);
 
-        if (account.getStatus() != AccountStatus.ACTIVE) {
-            throw new BusinessException(
-                    "Não é possível realizar saque em uma conta inativa"
-            );
+        try {
+
+            Account account = getOwnedAccount(accountId);
+
+            if (account.getStatus() != AccountStatus.ACTIVE) {
+                throw new BusinessException(
+                        "Não é possível realizar saque em uma conta inativa"
+                );
+            }
+
+            if (account.getBalance().compareTo(request.amount()) < 0) {
+                throw new BusinessException(
+                        "Saldo insuficiente"
+                );
+            }
+
+            account.setBalance(account.getBalance().subtract(request.amount()));
+
+            accountRepository.save(account);
+
+            Transaction transaction = Transaction.builder()
+                    .type(TransactionType.WITHDRAW)
+                    .status(TransactionStatus.COMPLETED)
+                    .amount(request.amount())
+                    .sourceAccount(account)
+                    .build();
+
+            Transaction savedTransaction = transactionRepository.save(transaction);
+
+            transferMetricsService.incrementTransferSuccess();
+
+            return transactionMapper.toResponse(savedTransaction);
+
+        } catch (Exception e) {
+            transferMetricsService.incrementTransferFailed();
+            throw e;
         }
-
-        if (account.getBalance().compareTo(request.amount()) < 0) {
-            throw new BusinessException(
-                    "Saldo insuficiente"
-            );
-        }
-
-        account.setBalance(
-                account.getBalance().subtract(request.amount())
-        );
-
-        accountRepository.save(account);
-
-        Transaction transaction = Transaction.builder()
-                .type(TransactionType.WITHDRAW)
-                .status(TransactionStatus.COMPLETED)
-                .amount(request.amount())
-                .sourceAccount(account)
-                .build();
-
-        Transaction savedTransaction =
-                transactionRepository.save(transaction);
-
-        return transactionMapper.toResponse(savedTransaction);
     }
 
     @Override
@@ -367,15 +383,13 @@ public class TransactionServiceImpl implements TransactionService {
 
             case WITHDRAW -> "Saque";
 
-            case TRANSFER ->
-                    movementType == MovementType.DEBIT
-                            ? "Transferência enviada"
-                            : "Transferência recebida";
+            case TRANSFER -> movementType == MovementType.DEBIT
+                    ? "Transferência enviada"
+                    : "Transferência recebida";
 
-            case PIX ->
-                    movementType == MovementType.DEBIT
-                            ? "PIX enviado"
-                            : "PIX recebido";
+            case PIX -> movementType == MovementType.DEBIT
+                    ? "PIX enviado"
+                    : "PIX recebido";
         };
     }
 
@@ -444,21 +458,17 @@ public class TransactionServiceImpl implements TransactionService {
 
         return switch (transaction.getType()) {
 
-            case DEPOSIT ->
-                    "Depósito";
+            case DEPOSIT -> "Depósito";
 
-            case WITHDRAW ->
-                    "Saque";
+            case WITHDRAW -> "Saque";
 
-            case TRANSFER ->
-                    direction == TransactionDirection.DEBIT
-                            ? "Transferência enviada"
-                            : "Transferência recebida";
+            case TRANSFER -> direction == TransactionDirection.DEBIT
+                    ? "Transferência enviada"
+                    : "Transferência recebida";
 
-            case PIX ->
-                    direction == TransactionDirection.DEBIT
-                            ? "PIX enviado"
-                            : "PIX recebido";
+            case PIX -> direction == TransactionDirection.DEBIT
+                    ? "PIX enviado"
+                    : "PIX recebido";
         };
     }
 

@@ -70,7 +70,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/actuator/health",
                                 "/actuator/info",
-                                "/actuator/metrics/**"
+                                "/actuator/metrics/**",
+                                "/actuator/prometheus"
                         ).permitAll()
 
                         // Cadastro de cliente é público

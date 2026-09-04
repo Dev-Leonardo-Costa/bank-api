@@ -1,6 +1,7 @@
 package com.leonardo.bank_api.auth.service;
 
 
+import com.leonardo.bank_api.auth.service.metrics.AuthMetricsService;
 import com.leonardo.bank_api.security.dto.request.LoginRequest;
 import com.leonardo.bank_api.security.dto.response.LoginResponse;
 import com.leonardo.bank_api.security.service.JwtService;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -17,23 +19,31 @@ public class AuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final AuthMetricsService authMetricsService;
 
     public LoginResponse login(LoginRequest request) {
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.email(),
-                        request.password()
-                )
-        );
+        try {
 
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.email(),
+                            request.password()
+                    )
+            );
 
-        String token = jwtService.generateToken(userDetails);
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
-        return new LoginResponse(
-                token,
-                "Bearer"
-        );
+            String token = jwtService.generateToken(userDetails);
+
+            authMetricsService.incrementAuthSuccess();
+
+            return new LoginResponse(token, "Bearer");
+
+        } catch (AuthenticationException ex) {
+            authMetricsService.incrementAuthFailure();
+            throw ex;
+        }
+
     }
 }

@@ -6,6 +6,7 @@ import com.leonardo.bank_api.account.entity.Account;
 import com.leonardo.bank_api.account.mapper.AccountMapper;
 import com.leonardo.bank_api.account.repository.AccountRepository;
 import com.leonardo.bank_api.account.service.AccountService;
+import com.leonardo.bank_api.account.service.metrics.AccountMetricsServiceImpl;
 import com.leonardo.bank_api.common.exception.ResourceNotFoundException;
 import com.leonardo.bank_api.customer.entity.Customer;
 import com.leonardo.bank_api.customer.repository.CustomerRepository;
@@ -26,6 +27,7 @@ public class AccountServiceImpl implements AccountService {
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
     private final AccountMapper accountMapper;
+    private final AccountMetricsServiceImpl accountMetricsService;
 
     @Transactional
     @Override
@@ -43,6 +45,8 @@ public class AccountServiceImpl implements AccountService {
         Account account = accountMapper.toEntity(customer, generateAccountNumber(), DEFAULT_AGENCY);
 
         Account savedAccount = accountRepository.save(account);
+
+        accountMetricsService.incrementAccountCreated();
 
         return accountMapper.toResponse(savedAccount);
     }

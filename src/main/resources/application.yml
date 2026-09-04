@@ -30,6 +30,7 @@ management:
           - health
           - info
           - metrics
+          - prometheus
 
   endpoint:
     health:

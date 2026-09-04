@@ -8,6 +8,7 @@ import com.leonardo.bank_api.customer.entity.Customer;
 import com.leonardo.bank_api.customer.mapper.CustomerMapper;
 import com.leonardo.bank_api.customer.repository.CustomerRepository;
 import com.leonardo.bank_api.customer.service.CustomerService;
+import com.leonardo.bank_api.customer.service.metrics.CustomerMetricsServiceImpl;
 import com.leonardo.bank_api.security.entity.RoleEntity;
 import com.leonardo.bank_api.security.entity.UserEntity;
 import com.leonardo.bank_api.security.repository.RoleRepository;
@@ -30,6 +31,8 @@ public class CustomerServiceImpl implements CustomerService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+
+    private final CustomerMetricsServiceImpl customerMetricsService;
 
     @Transactional
     @Override
@@ -54,6 +57,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .build();
 
         userRepository.save(user);
+
+        customerMetricsService.incrementCustomerCreated();
 
         return customerMapper.toResponse(savedCustomer);
     }
