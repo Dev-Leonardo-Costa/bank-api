@@ -3,8 +3,11 @@ global:
 
 scrape_configs:
   - job_name: 'bank-api'
+
     metrics_path: '/actuator/prometheus'
+
+    scheme: https
 
     static_configs:
       - targets:
-          - 'bank-api:8080'
+          - 'bank-api-92w8.onrender.com'
